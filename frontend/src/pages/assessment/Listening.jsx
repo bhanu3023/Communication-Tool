@@ -267,6 +267,11 @@ export default function Listening() {
           <Box sx={{ my: 2 }}>
             <ScoreGauge score={result.score} label="Listening Score" />
           </Box>
+          <Chip
+            color={result.score >= 75 ? 'success' : 'error'}
+            label={result.score >= 75 ? 'Passed ✓ (pass mark 75)' : 'Below the 75 pass mark'}
+            sx={{ mb: 2, fontWeight: 700 }}
+          />
           <Stack direction="row" spacing={2} justifyContent="center" sx={{ mb: 3 }}>
             <Chip color="success" label={`Correct: ${details.correctCount ?? '—'}`} />
             <Chip color="error" label={`Wrong: ${details.wrongCount ?? '—'}`} />

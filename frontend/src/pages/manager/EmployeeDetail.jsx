@@ -160,6 +160,15 @@ export default function EmployeeDetail() {
                         {SECTION_ICON[c.section]}
                         <Typography sx={{ fontWeight: 700 }}>{title(c.section)}</Typography>
                       </Stack>
+                      <Box sx={{ mb: 1 }}>
+                        {c.result === 'Passed' ? (
+                          <Chip size="small" color="success" label={`Passed ✓ (≥ ${c.passMark})`} />
+                        ) : c.result === 'Not passed' ? (
+                          <Chip size="small" color="error" label={`Not passed (needed ${c.passMark})`} />
+                        ) : (
+                          <Chip size="small" variant="outlined" label={`Pass mark ${c.passMark}`} />
+                        )}
+                      </Box>
                       <ProfileRow label="Attempts" value={`${c.attemptsUsed} / ${c.attemptsAllowed}`} />
                       <ProfileRow label="Latest" value={c.latestScore == null ? '—' : `${c.latestScore}/100`} />
                       <ProfileRow label="Best" value={c.bestScore == null ? '—' : `${c.bestScore}/100`} />

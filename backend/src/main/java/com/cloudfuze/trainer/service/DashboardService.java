@@ -52,14 +52,23 @@ public class DashboardService {
                 .filter(java.util.Objects::nonNull).max(Comparator.naturalOrder()).orElse(null);
         Double improvement = (used >= 2 && latest != null && done.get(used - 2).getScore() != null)
                 ? round(latest - done.get(used - 2).getScore()) : null;
+        boolean passed = best != null && best >= AttemptPolicy.PASS_MARK;
+        boolean exhausted = used >= allowed;
+        String result = passed ? "Passed"
+                : used == 0 ? "Not started"
+                : exhausted ? "Not passed"
+                : "In progress";
         return new DashboardDtos.SectionCard(
                 section.name(),
                 used > 0 ? "Completed" : "Not Started",
                 latest, best, improvement,
                 used, allowed,
                 used < allowed,
-                used >= allowed,
-                attemptPolicy.requestPending(user.getId(), section));
+                exhausted,
+                attemptPolicy.requestPending(user.getId(), section),
+                AttemptPolicy.PASS_MARK,
+                passed,
+                result);
     }
 
     /** All three section cards — also used by the assessment hub. */

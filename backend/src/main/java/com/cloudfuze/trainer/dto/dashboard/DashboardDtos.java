@@ -7,7 +7,7 @@ public final class DashboardDtos {
     private DashboardDtos() {
     }
 
-    /** One section's card: its own attempts, latest/best score, and improvement. */
+    /** One section's card: its own attempts, latest/best score, improvement, and pass status. */
     public record SectionCard(
             String section,
             String status,          // "Not Started" | "Completed"
@@ -18,7 +18,10 @@ public final class DashboardDtos {
             int attemptsAllowed,
             boolean canStart,
             boolean exhausted,
-            boolean requestPending) {
+            boolean requestPending,
+            double passMark,        // score needed to pass this section
+            boolean passed,         // best attempt >= passMark
+            String result) {        // "Passed" | "Not passed" (attempts used up) | "In progress" | "Not started"
     }
 
     /** A single section score over attempts, for a trend chart. */

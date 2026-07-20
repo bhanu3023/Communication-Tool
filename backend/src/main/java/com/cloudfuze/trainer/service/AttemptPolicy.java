@@ -17,6 +17,8 @@ public class AttemptPolicy {
 
     /** Base attempts every candidate gets per section. */
     public static final int BASE_ATTEMPTS_PER_SECTION = 3;
+    /** Score needed to pass a section (best attempt). */
+    public static final double PASS_MARK = 75.0;
 
     private final AssessmentSessionRepository sessionRepository;
     private final SectionAttemptControlRepository controlRepository;

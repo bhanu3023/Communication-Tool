@@ -479,6 +479,11 @@ export default function Speaking() {
             <Box sx={{ my: 2 }}>
               <ScoreGauge score={result.score} label="Speaking Score" />
             </Box>
+            <Chip
+              color={result.score >= 75 ? 'success' : 'error'}
+              label={result.score >= 75 ? 'Passed ✓ (pass mark 75)' : 'Below the 75 pass mark'}
+              sx={{ mb: 1, fontWeight: 700 }}
+            />
 
             {/* Where to focus */}
             {(weakest.length > 0 || missedCount > 0) && (

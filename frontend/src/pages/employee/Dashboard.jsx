@@ -65,13 +65,24 @@ function SectionCard({ card, onOpen, onStart, onRequest, requesting }) {
   return (
     <Card sx={{ height: '100%' }}>
       <CardContent>
-        <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1.5 }}>
+        <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1 }}>
           <Box sx={{ color: meta.color, display: 'flex' }}>{meta.icon}</Box>
           <Typography variant="h6">{title}</Typography>
           <Box sx={{ flexGrow: 1 }} />
           <Chip size="small" label={`${card.attemptsUsed}/${card.attemptsAllowed} attempts`}
             color={card.exhausted ? 'default' : 'primary'} variant="outlined" />
         </Stack>
+
+        {/* Pass status (pass mark 75) */}
+        <Box sx={{ mb: 1.5 }}>
+          {card.result === 'Passed' ? (
+            <Chip size="small" color="success" label={`Passed ✓ (best ≥ ${card.passMark})`} />
+          ) : card.result === 'Not passed' ? (
+            <Chip size="small" color="error" label={`Not passed — needed ${card.passMark}`} />
+          ) : (
+            <Chip size="small" variant="outlined" label={`Pass mark: ${card.passMark}`} />
+          )}
+        </Box>
 
         <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 0.5 }}>
           <Typography variant="body2" color="text.secondary">Latest score</Typography>

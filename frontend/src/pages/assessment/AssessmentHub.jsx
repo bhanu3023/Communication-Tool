@@ -56,13 +56,18 @@ export default function AssessmentHub() {
                 <CardContent>
                   <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
                     {s.icon}
-                    {c && c.attemptsUsed > 0 && (
-                      <Chip size="small" color="success" icon={<CheckCircleIcon />}
-                        label={`Latest ${c.latestScore ?? '—'}`} />
-                    )}
+                    {c && c.result === 'Passed' ? (
+                      <Chip size="small" color="success" icon={<CheckCircleIcon />} label="Passed" />
+                    ) : c && c.result === 'Not passed' ? (
+                      <Chip size="small" color="error" label="Not passed" />
+                    ) : c && c.attemptsUsed > 0 ? (
+                      <Chip size="small" label={`Best ${c.bestScore ?? '—'}`} />
+                    ) : null}
                   </Stack>
                   <Typography variant="h6">{s.title}</Typography>
-                  <Typography variant="caption" color="text.secondary">{attemptsText}</Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    {attemptsText}{c ? ` · pass mark ${c.passMark}` : ''}
+                  </Typography>
                   <Typography variant="body2" sx={{ mt: 1, mb: 2 }}>{s.detail}</Typography>
 
                   {c && c.canStart ? (
