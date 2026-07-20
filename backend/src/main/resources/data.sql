@@ -21,7 +21,8 @@ WHERE d.name = 'Migration'
 INSERT INTO users (created_at, updated_at, employee_id, name, email, role, department_id, team_id, manager_id)
 SELECT now(), now(), v.emp, v.name, v.email, 'MANAGER', d.id, t.id, NULL
 FROM (VALUES
-    ('CF-1001', 'Abhishek Sakala', 'Abhishek.Sakala@cloudfuze.com')
+    ('CF-1001', 'Abhishek Sakala', 'Abhishek.Sakala@cloudfuze.com'),
+    ('CF-1010', 'Ajay Singh',      'ajay.singh@cloudfuze.com')
     ) AS v(emp, name, email)
 JOIN department d ON d.name = 'Migration'
 JOIN team t ON t.name = 'Migration'
