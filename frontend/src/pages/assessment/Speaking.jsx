@@ -26,6 +26,7 @@ import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import InsightsIcon from '@mui/icons-material/Insights';
 import CircularTimer from '../../components/CircularTimer';
 import ScoreGauge from '../../components/ScoreGauge';
+import LockedVideo from '../../components/LockedVideo';
 import ExamWarningDialog from '../../components/ExamWarningDialog';
 import ScoringScreen from '../../components/ScoringScreen';
 import { useCountdown } from '../../hooks/useCountdown';
@@ -235,16 +236,10 @@ export default function Speaking() {
             A quick guide to the Speaking test — please watch it fully before you begin.
           </Typography>
           <Box sx={{ borderRadius: 2, overflow: 'hidden', bgcolor: '#000' }}>
-            {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
-            <video
+            <LockedVideo
               src="/speaking-intro.mp4"
-              controls
-              autoPlay
-              controlsList="nodownload noplaybackrate"
-              disablePictureInPicture
               onEnded={() => setVideoEnded(true)}
               onError={() => setVideoEnded(true)}
-              style={{ width: '100%', display: 'block', maxHeight: '70vh' }}
             />
           </Box>
           <Box sx={{ textAlign: 'center', mt: 2 }}>

@@ -20,6 +20,7 @@ import VolumeUpIcon from '@mui/icons-material/VolumeUp';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import CircularTimer from '../../components/CircularTimer';
 import ScoreGauge from '../../components/ScoreGauge';
+import LockedVideo from '../../components/LockedVideo';
 import ExamWarningDialog from '../../components/ExamWarningDialog';
 import ScoringScreen from '../../components/ScoringScreen';
 import { useCountdown, formatTime } from '../../hooks/useCountdown';
@@ -172,16 +173,10 @@ export default function Listening() {
             A quick guide to the Listening test — please watch it fully before you begin.
           </Typography>
           <Box sx={{ borderRadius: 2, overflow: 'hidden', bgcolor: '#000' }}>
-            {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
-            <video
+            <LockedVideo
               src="/listening-intro.mp4"
-              controls
-              autoPlay
-              controlsList="nodownload noplaybackrate"
-              disablePictureInPicture
               onEnded={() => setVideoEnded(true)}
               onError={() => setVideoEnded(true)}
-              style={{ width: '100%', display: 'block', maxHeight: '70vh' }}
             />
           </Box>
           <Box sx={{ textAlign: 'center', mt: 2 }}>

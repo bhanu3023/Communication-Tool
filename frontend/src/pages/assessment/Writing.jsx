@@ -17,6 +17,7 @@ import SaveIcon from '@mui/icons-material/Save';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import ScoreGauge from '../../components/ScoreGauge';
+import LockedVideo from '../../components/LockedVideo';
 import CircularTimer from '../../components/CircularTimer';
 import { WritingSection } from '../../components/AttemptReview';
 import { useCountdown } from '../../hooks/useCountdown';
@@ -237,16 +238,10 @@ export default function Writing() {
             A quick guide to the Writing test — please watch it fully before you begin.
           </Typography>
           <Box sx={{ borderRadius: 2, overflow: 'hidden', bgcolor: '#000' }}>
-            {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
-            <video
+            <LockedVideo
               src="/writing-intro.mp4"
-              controls
-              autoPlay
-              controlsList="nodownload noplaybackrate"
-              disablePictureInPicture
               onEnded={() => setVideoEnded(true)}
               onError={() => setVideoEnded(true)}
-              style={{ width: '100%', display: 'block', maxHeight: '70vh' }}
             />
           </Box>
           <Box sx={{ textAlign: 'center', mt: 2 }}>
