@@ -1,0 +1,36 @@
+* {
+  box-sizing: border-box;
+}
+html,
+body,
+#root {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+}
+body {
+  font-family: 'Inter', system-ui, Avenir, Helvetica, Arial, sans-serif;
+  background: #f4f7fb;
+  color: #1a2233;
+}
+a {
+  text-decoration: none;
+  color: inherit;
+}
+
+/* --- Exam lockdown (applied while a section is active) --- */
+/* No text selection anywhere during a test (typing in the answer box still works). */
+body.exam-active,
+body.exam-active * {
+  -webkit-user-select: none !important;
+  -moz-user-select: none !important;
+  -ms-user-select: none !important;
+  user-select: none !important;
+  -webkit-touch-callout: none;
+}
+/* prevent capturing the exam via the browser's print dialog */
+@media print {
+  body.exam-active * {
+    display: none !important;
+  }
+}

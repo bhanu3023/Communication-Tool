@@ -1,0 +1,55 @@
+server:
+  port: 8080
+  error:
+    include-message: always
+
+spring:
+  application:
+    name: ai-comm-trainer
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/trainer}
+    username: ${POSTGRES_USER:trainer}
+    password: ${POSTGRES_PASSWORD:trainer}
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+    defer-datasource-initialization: true   # run data.sql AFTER Hibernate creates tables
+    properties:
+      hibernate:
+        format_sql: false
+  sql:
+    init:
+      mode: always          # runs data.sql for seed content (idempotent inserts)
+  # NOTE: We intentionally do NOT configure spring.security.oauth2.resourceserver here.
+  # Azure ID tokens are verified on demand by AzureTokenVerifier (lazy JWKS decoder),
+  # so the backend boots cleanly without a network round-trip to Azure at startup.
+
+app:
+  jwt:
+    secret: ${APP_JWT_SECRET:change-me-to-a-long-random-secret-value-at-least-32-chars}
+    expiration-minutes: ${APP_JWT_EXPIRATION_MINUTES:480}
+  azure:
+    tenant-id: ${AZURE_TENANT_ID:}
+    client-id: ${AZURE_CLIENT_ID:}
+  cors:
+    allowed-origins: ${APP_CORS_ORIGINS:http://localhost:5173}
+  openai:
+    api-key: ${OPENAI_API_KEY:}
+    model: ${OPENAI_MODEL:gpt-4o-mini}
+    audio-model: ${OPENAI_AUDIO_MODEL:gpt-4o-mini-audio-preview}
+    base-url: ${OPENAI_BASE_URL:https://api.openai.com/v1}
+  azure-speech:
+    # Azure AI Speech (Cognitive Services) resource — enables real voice pronunciation scoring.
+    key: ${AZURE_SPEECH_KEY:}
+    region: ${AZURE_SPEECH_REGION:}
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+  api-docs:
+    path: /v3/api-docs
+
+logging:
+  level:
+    com.cloudfuze.trainer: INFO
