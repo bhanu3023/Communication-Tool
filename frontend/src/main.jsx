@@ -10,32 +10,42 @@ import { AuthProvider } from './contexts/AuthContext';
 import { ToastProvider } from './contexts/ToastContext';
 import './index.css';
 
-// When the Microsoft sign-in popup redirects back to our origin, this same app would
-// otherwise boot a second time INSIDE the popup and consume the auth-response hash
-// before the opener window can read it (causing MSAL "hash_empty_error"). If we detect
-// we are that popup, don't boot the SPA — leave the hash intact for the opener to read.
-const authHash = window.location.hash || '';
-const isAuthPopup =
-  window.opener && window.opener !== window && /[#&](code|error|state|id_token)=/.test(authHash);
-
-if (!isAuthPopup) {
-  // MSAL v3 must be initialized before rendering.
-  msalInstance.initialize().then(() => {
-    ReactDOM.createRoot(document.getElementById('root')).render(
-      <React.StrictMode>
-        <MsalProvider instance={msalInstance}>
-          <ThemeProvider theme={theme}>
-            <CssBaseline />
-            <BrowserRouter>
-              <ToastProvider>
-                <AuthProvider>
-                  <App />
-                </AuthProvider>
-              </ToastProvider>
-            </BrowserRouter>
-          </ThemeProvider>
-        </MsalProvider>
-      </React.StrictMode>,
-    );
-  });
+function renderApp() {
+  ReactDOM.createRoot(document.getElementById('root')).render(
+    <React.StrictMode>
+      <MsalProvider instance={msalInstance}>
+        <ThemeProvider theme={theme}>
+          <CssBaseline />
+          <BrowserRouter>
+            <ToastProvider>
+              <AuthProvider>
+                <App />
+              </AuthProvider>
+            </ToastProvider>
+          </BrowserRouter>
+        </ThemeProvider>
+      </MsalProvider>
+    </React.StrictMode>,
+  );
 }
+
+// MSAL v3 must be initialized before use. We process the sign-in redirect response
+// HERE — before the app renders — so it can't race with MsalProvider's own internal
+// handling (which would otherwise consume the auth code first and drop it). If a
+// redirect just completed, stash the ID token for AuthContext to exchange on mount.
+msalInstance
+  .initialize()
+  .then(() => msalInstance.handleRedirectPromise())
+  .then((result) => {
+    if (result?.idToken) {
+      sessionStorage.setItem('pending_id_token', result.idToken);
+    }
+  })
+  .catch((err) => {
+    // Surface Azure errors (e.g. consent / redirect-URI issues) instead of silently
+    // bouncing back to the login page.
+    // eslint-disable-next-line no-console
+    console.error('Microsoft sign-in redirect failed:', err);
+    sessionStorage.setItem('login_error', err?.errorMessage || err?.message || 'Sign-in failed');
+  })
+  .finally(renderApp);

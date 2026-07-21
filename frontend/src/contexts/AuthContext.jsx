@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useMsal } from '@azure/msal-react';
 import { useNavigate } from 'react-router-dom';
 import { loginRequest } from '../authConfig';
@@ -20,24 +20,59 @@ export function AuthProvider({ children }) {
 
   const isAuthenticated = Boolean(localStorage.getItem('app_token') && profile);
 
+  // Guard so the ID-token exchange runs only once even if both the MSAL event
+  // callback and handleRedirectPromise deliver the same result.
+  const exchanging = useRef(false);
+
+  // Exchange the Microsoft ID token for our app JWT and route the user in.
+  const completeLogin = useCallback(
+    async (idToken) => {
+      if (exchanging.current || localStorage.getItem('app_token')) return;
+      exchanging.current = true;
+      setLoading(true);
+      try {
+        const { data } = await api.post('/auth/login', { idToken });
+        localStorage.setItem('app_token', data.token);
+        localStorage.setItem('profile', JSON.stringify(data.profile));
+        setProfile(data.profile);
+        showToast(`Welcome, ${data.profile.name}`, 'success');
+        navigate(data.profile.role === 'MANAGER' ? '/manager' : '/dashboard');
+      } catch (err) {
+        showToast(err?.response?.data?.message || err?.message || 'Login failed', 'error');
+      } finally {
+        exchanging.current = false;
+        setLoading(false);
+      }
+    },
+    [navigate, showToast],
+  );
+
+  // Full-page (redirect) sign-in — the whole tab goes to Microsoft, not a popup.
   const login = useCallback(async () => {
     setLoading(true);
     try {
-      const result = await instance.loginPopup(loginRequest);
-      const idToken = result.idToken;
-      const { data } = await api.post('/auth/login', { idToken });
-      localStorage.setItem('app_token', data.token);
-      localStorage.setItem('profile', JSON.stringify(data.profile));
-      setProfile(data.profile);
-      showToast(`Welcome, ${data.profile.name}`, 'success');
-      navigate(data.profile.role === 'MANAGER' ? '/manager' : '/dashboard');
+      await instance.loginRedirect(loginRequest); // navigates away; resumes below on return
     } catch (err) {
-      const msg = err?.response?.data?.message || err?.message || 'Login failed';
-      showToast(msg, 'error');
-    } finally {
+      showToast(err?.message || 'Login failed', 'error');
       setLoading(false);
     }
-  }, [instance, navigate, showToast]);
+  }, [instance, showToast]);
+
+  // Finish login on return from the Microsoft redirect. main.jsx processes the redirect
+  // response before the app mounts and stashes the ID token (or an error) in
+  // sessionStorage; we pick it up here and exchange it for our app session.
+  useEffect(() => {
+    const err = sessionStorage.getItem('login_error');
+    if (err) {
+      sessionStorage.removeItem('login_error');
+      showToast(err, 'error');
+    }
+    const idToken = sessionStorage.getItem('pending_id_token');
+    if (idToken) {
+      sessionStorage.removeItem('pending_id_token');
+      completeLogin(idToken);
+    }
+  }, [completeLogin, showToast]);
 
   const logout = useCallback(async () => {
     localStorage.removeItem('app_token');

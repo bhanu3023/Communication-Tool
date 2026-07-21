@@ -14,6 +14,10 @@ export const msalConfig = {
     clientId: CLIENT_ID,
     authority: `https://login.microsoftonline.com/${TENANT_ID}`,
     redirectUri: import.meta.env.VITE_AZURE_REDIRECT_URI || window.location.origin,
+    // Let the app decide where to go after login (we route to the dashboard/manager
+    // view). Without this, MSAL navigates back to the login page and the sign-in
+    // appears to "bounce" back to /login.
+    navigateToLoginRequestUrl: false,
   },
   cache: {
     cacheLocation: 'sessionStorage',
