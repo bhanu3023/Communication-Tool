@@ -158,7 +158,7 @@ export function ListeningSection({ details, score, showHeader = true }) {
 }
 
 /** Speaking feedback: per-sentence target vs said, sub-scores, tips, and recording. */
-export function SpeakingSection({ details, score, showHeader = true, sessionId }) {
+export function SpeakingSection({ details, score, showHeader = true, sessionId, managerView = false }) {
   const speaking = details || {};
   const tts = useSpeechSynthesis();
   return (
@@ -178,12 +178,16 @@ export function SpeakingSection({ details, score, showHeader = true, sessionId }
                   <Chip size="small" color={scoreColor(ev.overall)} label={`${Math.round(ev.overall)} / 100`} />
                 )}
               </Stack>
-              <Typography variant="caption" color="text.secondary">Target</Typography>
-              <Typography variant="body2" sx={{ mb: 0.5, fontWeight: 500 }}>“{it.expected}”</Typography>
-              {tts.supported && (
-                <Button size="small" startIcon={<VolumeUpIcon />} onClick={() => tts.speak(it.expected)} sx={{ mb: 1.5 }}>
-                  Hear how to say it
-                </Button>
+              {!managerView && (
+                <>
+                  <Typography variant="caption" color="text.secondary">Target</Typography>
+                  <Typography variant="body2" sx={{ mb: 0.5, fontWeight: 500 }}>“{it.expected}”</Typography>
+                  {tts.supported && (
+                    <Button size="small" startIcon={<VolumeUpIcon />} onClick={() => tts.speak(it.expected)} sx={{ mb: 1.5 }}>
+                      Hear how to say it
+                    </Button>
+                  )}
+                </>
               )}
               <Typography variant="caption" color="text.secondary" display="block">You said</Typography>
               <Typography variant="body2"
@@ -216,7 +220,7 @@ export function SpeakingSection({ details, score, showHeader = true, sessionId }
 }
 
 /** Writing feedback: per-prompt evaluation metrics and suggestions. */
-export function WritingSection({ details, score, showHeader = true }) {
+export function WritingSection({ details, score, showHeader = true, managerView = false }) {
   const writing = details || {};
   return (
     <Box>
@@ -234,8 +238,12 @@ export function WritingSection({ details, score, showHeader = true }) {
                   <Chip size="small" color={scoreColor(ev.overall)} label={`${Math.round(ev.overall)} / 100`} />
                 )}
               </Stack>
-              <Typography variant="caption" color="text.secondary">Task</Typography>
-              <Typography variant="body2" sx={{ mb: 1.5, whiteSpace: 'pre-line' }}>{it.prompt}</Typography>
+              {!managerView && (
+                <>
+                  <Typography variant="caption" color="text.secondary">Task</Typography>
+                  <Typography variant="body2" sx={{ mb: 1.5, whiteSpace: 'pre-line' }}>{it.prompt}</Typography>
+                </>
+              )}
 
               <Typography variant="caption" color="text.secondary">What you wrote</Typography>
               <Paper variant="outlined" sx={{ p: 1.5, mb: 1.5, bgcolor: '#f8fafd' }}>
@@ -294,12 +302,22 @@ export function WritingSection({ details, score, showHeader = true }) {
  * Feedback for a single section attempt. Each attempt belongs to one section, so
  * this renders just that section's detail. Shared by dashboard + manager portal.
  */
-export default function AttemptReview({ attempt }) {
+export default function AttemptReview({ attempt, managerView = false }) {
   const { section, details, score, sessionId } = attempt;
   if (section === 'LISTENING') return <ListeningSection details={details} score={score} showHeader={false} />;
   if (section === 'SPEAKING') {
-    return <SpeakingSection details={details} score={score} sessionId={sessionId} showHeader={false} />;
+    return (
+      <SpeakingSection
+        details={details}
+        score={score}
+        sessionId={sessionId}
+        showHeader={false}
+        managerView={managerView}
+      />
+    );
   }
-  if (section === 'WRITING') return <WritingSection details={details} score={score} showHeader={false} />;
+  if (section === 'WRITING') {
+    return <WritingSection details={details} score={score} showHeader={false} managerView={managerView} />;
+  }
   return null;
 }

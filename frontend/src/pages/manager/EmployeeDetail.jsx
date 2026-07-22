@@ -260,7 +260,7 @@ export default function EmployeeDetail() {
                           ⚠ Weaker than the previous attempt in: {a.declinedAreas.join(', ')}
                         </Typography>
                       )}
-                      <AttemptReview attempt={a} />
+                      <AttemptReview attempt={a} managerView />
                     </AccordionDetails>
                   </Accordion>
                 ))
