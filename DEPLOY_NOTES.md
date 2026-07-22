@@ -16,11 +16,15 @@ true-score display, improved/declined feedback, full-page Microsoft redirect log
 | `OPENAI_AUDIO_MODEL` | for audio scoring | Use `gpt-audio-mini` (or `gpt-audio`). The old `gpt-4o-audio-preview` is retired and returns 404 → Speaking silently falls back to transcript. |
 | `OPENAI_API_KEY` | optional | If empty, a deterministic mock evaluator is used. |
 | `AZURE_TENANT_ID`, `AZURE_CLIENT_ID` (+ `VITE_` copies) | **YES** | Microsoft login. |
-| `VITE_AZURE_REDIRECT_URI` | **YES** | Must equal the deployed URL (e.g. `https://<app-host>`). |
+| `VITE_AZURE_REDIRECT_URI` | not used | The app now redirects to its own origin (`window.location.origin`) automatically — no build-time value needed. Just register the origin in Azure (see below). |
 | `APP_CORS_ORIGINS` | **YES** | Must include the deployed frontend URL. |
 
 ## 3. Azure app registration (login is now a full-page redirect)
-- Register the deployed URL as a **Single-Page Application (SPA)** redirect URI.
+- Register the deployed URL as a **Single-Page Application (SPA)** redirect URI —
+  e.g. `https://aicommunication.cftools.live` (exact, no trailing slash).
+- Keep `http://localhost:5174` registered too for local dev.
+- The frontend redirects to its **own origin** at runtime, so each origin the app is
+  served from must be a registered SPA redirect URI. No build-time redirect variable.
 - Redirect flow (not popup) is used; `navigateToLoginRequestUrl` is `false`.
 
 ## 4. Build & run

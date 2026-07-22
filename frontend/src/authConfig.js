@@ -13,7 +13,12 @@ export const msalConfig = {
   auth: {
     clientId: CLIENT_ID,
     authority: `https://login.microsoftonline.com/${TENANT_ID}`,
-    redirectUri: import.meta.env.VITE_AZURE_REDIRECT_URI || window.location.origin,
+    // Always redirect back to whatever origin actually served the app (localhost in
+    // dev, the real domain in production). This avoids a baked-in build-time value
+    // (e.g. localhost) sending production users to a dead address after sign-in.
+    // Each origin used must be registered as a Single-page application redirect URI
+    // in the Azure app registration.
+    redirectUri: window.location.origin,
     // Let the app decide where to go after login (we route to the dashboard/manager
     // view). Without this, MSAL navigates back to the login page and the sign-in
     // appears to "bounce" back to /login.
