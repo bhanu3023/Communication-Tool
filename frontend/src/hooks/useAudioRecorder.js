@@ -61,33 +61,32 @@ function blobToBase64(blob) {
 
 /**
  * Records microphone audio and returns it as a base64 WAV (16 kHz mono) suitable
- * for Azure pronunciation assessment. Audio is captured via Web Audio and routed
- * through a muted gain node, so nothing plays back to the speakers (no echo).
+ * for Azure / OpenAI pronunciation assessment.
+ *
+ * Capture uses the standard MediaRecorder API (reliable across browsers and secure
+ * production origins), then the recorded blob is decoded to PCM and re-encoded to
+ * 16 kHz mono WAV. This replaces the deprecated ScriptProcessorNode approach, which
+ * silently produced empty recordings in some production environments.
  */
 export function useAudioRecorder() {
-  const supported = typeof navigator !== 'undefined' && !!navigator.mediaDevices?.getUserMedia;
+  const supported =
+    typeof navigator !== 'undefined' &&
+    !!navigator.mediaDevices?.getUserMedia &&
+    typeof window !== 'undefined' &&
+    typeof window.MediaRecorder !== 'undefined';
   const [recording, setRecording] = useState(false);
 
-  const ctxRef = useRef(null);
   const streamRef = useRef(null);
-  const procRef = useRef(null);
+  const recorderRef = useRef(null);
   const chunksRef = useRef([]);
-  const rateRef = useRef(16000);
+  const mimeRef = useRef('');
 
   const cleanup = useCallback(() => {
-    if (procRef.current) {
-      procRef.current.disconnect();
-      procRef.current.onaudioprocess = null;
-      procRef.current = null;
-    }
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((t) => t.stop());
       streamRef.current = null;
     }
-    if (ctxRef.current) {
-      ctxRef.current.close().catch(() => {});
-      ctxRef.current = null;
-    }
+    recorderRef.current = null;
   }, []);
 
   const start = useCallback(async () => {
@@ -95,32 +94,18 @@ export function useAudioRecorder() {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
-      const AudioCtx = window.AudioContext || window.webkitAudioContext;
-      const ctx = new AudioCtx();
-      ctxRef.current = ctx;
-      // A context created outside a user gesture (or under stricter autoplay policies
-      // in production) can start "suspended" — then onaudioprocess never fires and the
-      // recording is silent. Resume it before wiring up capture.
-      if (ctx.state === 'suspended') {
-        try {
-          await ctx.resume();
-        } catch {
-          /* ignore — capture may still work */
-        }
-      }
-      rateRef.current = ctx.sampleRate;
-      const source = ctx.createMediaStreamSource(stream);
-      const proc = ctx.createScriptProcessor(4096, 1, 1);
-      procRef.current = proc;
+      // Pick a container the browser actually supports (Chrome/Edge: webm/opus,
+      // Safari: mp4). We transcode to WAV on stop, so the container doesn't matter.
+      const candidates = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg'];
+      const mime = candidates.find((t) => window.MediaRecorder.isTypeSupported?.(t)) || '';
+      mimeRef.current = mime;
+      const recorder = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
+      recorderRef.current = recorder;
       chunksRef.current = [];
-      proc.onaudioprocess = (e) => {
-        chunksRef.current.push(new Float32Array(e.inputBuffer.getChannelData(0)));
+      recorder.ondataavailable = (e) => {
+        if (e.data && e.data.size > 0) chunksRef.current.push(e.data);
       };
-      const mute = ctx.createGain();
-      mute.gain.value = 0; // do not play the mic back to the speakers
-      source.connect(proc);
-      proc.connect(mute);
-      mute.connect(ctx.destination);
+      recorder.start(200); // emit chunks periodically so nothing is lost
       setRecording(true);
     } catch {
       setRecording(false);
@@ -129,21 +114,39 @@ export function useAudioRecorder() {
 
   // Returns base64 WAV (data URL) or null.
   const stop = useCallback(async () => {
-    const chunks = chunksRef.current;
-    const inRate = rateRef.current;
     setRecording(false);
-    cleanup();
-    const len = chunks.reduce((a, c) => a + c.length, 0);
-    chunksRef.current = [];
-    if (len === 0) return null;
-    const flat = new Float32Array(len);
-    let off = 0;
-    chunks.forEach((c) => {
-      flat.set(c, off);
-      off += c.length;
+    const recorder = recorderRef.current;
+    if (!recorder) {
+      cleanup();
+      return null;
+    }
+    // Wait for MediaRecorder to flush all buffered audio.
+    const blob = await new Promise((resolve) => {
+      recorder.onstop = () =>
+        resolve(new Blob(chunksRef.current, { type: mimeRef.current || 'audio/webm' }));
+      try {
+        recorder.stop();
+      } catch {
+        resolve(new Blob(chunksRef.current, { type: mimeRef.current || 'audio/webm' }));
+      }
     });
-    const wav = encodeWav(downsample(flat, inRate, 16000), 16000);
-    return blobToBase64(wav);
+    cleanup();
+    chunksRef.current = [];
+    if (!blob || blob.size === 0) return null;
+
+    // Decode the recorded audio to PCM, then downsample to 16 kHz mono WAV.
+    try {
+      const arrayBuf = await blob.arrayBuffer();
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      const ctx = new AudioCtx();
+      const audioBuf = await ctx.decodeAudioData(arrayBuf);
+      const channel = audioBuf.getChannelData(0); // mono (first channel)
+      const wav = encodeWav(downsample(channel, audioBuf.sampleRate, 16000), 16000);
+      ctx.close().catch(() => {});
+      return blobToBase64(wav);
+    } catch {
+      return null;
+    }
   }, [cleanup]);
 
   useEffect(() => () => cleanup(), [cleanup]);
