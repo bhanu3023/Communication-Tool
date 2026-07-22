@@ -178,16 +178,14 @@ export function SpeakingSection({ details, score, showHeader = true, sessionId, 
                   <Chip size="small" color={scoreColor(ev.overall)} label={`${Math.round(ev.overall)} / 100`} />
                 )}
               </Stack>
-              {!managerView && (
-                <>
-                  <Typography variant="caption" color="text.secondary">Target</Typography>
-                  <Typography variant="body2" sx={{ mb: 0.5, fontWeight: 500 }}>“{it.expected}”</Typography>
-                  {tts.supported && (
-                    <Button size="small" startIcon={<VolumeUpIcon />} onClick={() => tts.speak(it.expected)} sx={{ mb: 1.5 }}>
-                      Hear how to say it
-                    </Button>
-                  )}
-                </>
+              <Typography variant="caption" color="text.secondary">Target</Typography>
+              <Typography variant="body2" sx={{ mb: 0.5, fontWeight: 500 }}>“{it.expected}”</Typography>
+              {/* "Hear how to say it" is a learning aid for the employee — hidden in the
+                  manager view, but the Target text stays so the manager can see what was expected. */}
+              {!managerView && tts.supported && (
+                <Button size="small" startIcon={<VolumeUpIcon />} onClick={() => tts.speak(it.expected)} sx={{ mb: 1.5 }}>
+                  Hear how to say it
+                </Button>
               )}
               <Typography variant="caption" color="text.secondary" display="block">You said</Typography>
               <Typography variant="body2"
@@ -220,7 +218,7 @@ export function SpeakingSection({ details, score, showHeader = true, sessionId, 
 }
 
 /** Writing feedback: per-prompt evaluation metrics and suggestions. */
-export function WritingSection({ details, score, showHeader = true, managerView = false }) {
+export function WritingSection({ details, score, showHeader = true }) {
   const writing = details || {};
   return (
     <Box>
@@ -238,12 +236,8 @@ export function WritingSection({ details, score, showHeader = true, managerView 
                   <Chip size="small" color={scoreColor(ev.overall)} label={`${Math.round(ev.overall)} / 100`} />
                 )}
               </Stack>
-              {!managerView && (
-                <>
-                  <Typography variant="caption" color="text.secondary">Task</Typography>
-                  <Typography variant="body2" sx={{ mb: 1.5, whiteSpace: 'pre-line' }}>{it.prompt}</Typography>
-                </>
-              )}
+              <Typography variant="caption" color="text.secondary">Task</Typography>
+              <Typography variant="body2" sx={{ mb: 1.5, whiteSpace: 'pre-line' }}>{it.prompt}</Typography>
 
               <Typography variant="caption" color="text.secondary">What you wrote</Typography>
               <Paper variant="outlined" sx={{ p: 1.5, mb: 1.5, bgcolor: '#f8fafd' }}>
@@ -317,7 +311,7 @@ export default function AttemptReview({ attempt, managerView = false }) {
     );
   }
   if (section === 'WRITING') {
-    return <WritingSection details={details} score={score} showHeader={false} managerView={managerView} />;
+    return <WritingSection details={details} score={score} showHeader={false} />;
   }
   return null;
 }
