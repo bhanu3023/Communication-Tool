@@ -281,6 +281,11 @@ export default function Dashboard() {
                       <Chip size="small" color={scoreColor(a.score)} label={`Score: ${a.score ?? '—'}`} />
                       <Improvement value={a.improvement} />
                     </Stack>
+                    {a.improvedAreas?.length > 0 && (
+                      <Typography variant="body2" color="success.main" sx={{ mb: a.declinedAreas?.length ? 0.5 : 1.5, fontWeight: 500 }}>
+                        ✔ Improved since your last attempt in: {a.improvedAreas.join(', ')}
+                      </Typography>
+                    )}
                     {a.declinedAreas?.length > 0 && (
                       <Typography variant="body2" color="error.main" sx={{ mb: 1.5, fontWeight: 500 }}>
                         ⚠ Weaker than your last attempt in: {a.declinedAreas.join(', ')}

@@ -250,6 +250,11 @@ export default function EmployeeDetail() {
                       </Stack>
                     </AccordionSummary>
                     <AccordionDetails>
+                      {a.improvedAreas?.length > 0 && (
+                        <Typography variant="body2" color="success.main" sx={{ mb: a.declinedAreas?.length ? 0.5 : 1.5, fontWeight: 500 }}>
+                          ✔ Improved since the previous attempt in: {a.improvedAreas.join(', ')}
+                        </Typography>
+                      )}
                       {a.declinedAreas?.length > 0 && (
                         <Typography variant="body2" color="error.main" sx={{ mb: 1.5, fontWeight: 500 }}>
                           ⚠ Weaker than the previous attempt in: {a.declinedAreas.join(', ')}

@@ -11,6 +11,7 @@ public record AttemptDetail(
         String date,
         Double score,
         Double improvement,   // score minus the previous attempt of this section; null if first attempt
+        java.util.List<String> improvedAreas, // sub-areas that rose vs the previous attempt (e.g. "Fluency (+12)")
         java.util.List<String> declinedAreas, // sub-areas that dropped vs the previous attempt (e.g. "Fluency (-12)")
         int proctorWarnings,
         String status,

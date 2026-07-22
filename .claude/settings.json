@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "allow": [
+      "Bash(git status)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git add:*)",
+      "Bash(mvn:*)",
+      "Bash(npm run:*)",
+      "Bash(npm install)",
+      "Bash(npm ci)",
+      "Bash(docker compose:*)",
+      "Read(//**)"
+    ],
+    "deny": [
+      "Read(./.env)",
+      "Read(./frontend/.env)",
+      "Read(./backend/.env)",
+      "Write(./.env)",
+      "Write(./frontend/.env)",
+      "Write(./backend/.env)",
+      "Read(./**/*.pem)",
+      "Read(./**/*.key)"
+    ],
+    "ask": [
+      "Write(./backend/src/main/resources/data.sql)",
+      "Write(./docker-compose.yml)",
+      "Bash(git push:*)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/block-sensitive-writes.sh"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/post-edit-format.sh"
+          },
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/validate-code.sh"
+          }
+        ]
+      }
+    ]
+  }
+}

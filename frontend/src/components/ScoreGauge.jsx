@@ -1,4 +1,5 @@
 import { Box, CircularProgress, Typography } from '@mui/material';
+import { fmtScore } from '../utils/format';
 
 /** Circular 0-100 score gauge with color banding. */
 export default function ScoreGauge({ score, size = 120, label }) {
@@ -31,7 +32,7 @@ export default function ScoreGauge({ score, size = 120, label }) {
           }}
         >
           <Typography variant="h5" fontWeight={700}>
-            {score == null ? '—' : Math.round(value)}
+            {score == null ? '—' : fmtScore(value)}
           </Typography>
           <Typography variant="caption" color="text.secondary">
             / 100

@@ -5,11 +5,14 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.web.client.ClientHttpRequestFactories;
+import org.springframework.boot.web.client.ClientHttpRequestFactorySettings;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestClient;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 
@@ -35,7 +38,15 @@ public class OpenAiClient {
         this.apiKey = apiKey;
         this.model = model;
         this.audioModel = audioModel;
-        this.restClient = RestClient.builder().baseUrl(baseUrl).build();
+        // Bound every OpenAI call so a slow/hung API can't tie up request threads
+        // indefinitely — on timeout the call throws and the caller falls back to mock.
+        ClientHttpRequestFactorySettings settings = ClientHttpRequestFactorySettings.DEFAULTS
+                .withConnectTimeout(Duration.ofSeconds(10))
+                .withReadTimeout(Duration.ofSeconds(60));
+        this.restClient = RestClient.builder()
+                .baseUrl(baseUrl)
+                .requestFactory(ClientHttpRequestFactories.get(settings))
+                .build();
     }
 
     public boolean isEnabled() {

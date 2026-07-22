@@ -78,11 +78,14 @@ public class AttemptDetailService {
             Double prev = scoreByKey.get(prevKey);
             Double improvement = (prev != null && s.getScore() != null)
                     ? Math.round((s.getScore() - prev) * 10.0) / 10.0 : null;
-            List<String> declined = dimsByKey.containsKey(prevKey)
-                    ? declinedAreas(dimsByKey.get(prevKey), dimsByKey.get(key)) : List.of();
+            boolean hasPrevDims = dimsByKey.containsKey(prevKey);
+            List<String> improved = hasPrevDims
+                    ? changedAreas(dimsByKey.get(prevKey), dimsByKey.get(key), true) : List.of();
+            List<String> declined = hasPrevDims
+                    ? changedAreas(dimsByKey.get(prevKey), dimsByKey.get(key), false) : List.of();
             out.add(new AttemptDetail(
                     s.getId(), s.getSection().name(), s.getAttemptNumber(), DATE.format(s.getCreatedAt()),
-                    s.getScore(), improvement, declined, s.getProctorWarnings(), s.getStatus().name(),
+                    s.getScore(), improvement, improved, declined, s.getProctorWarnings(), s.getStatus().name(),
                     detailsByKey.get(key)));
         }
         return out;
@@ -114,21 +117,28 @@ public class AttemptDetailService {
         return avg;
     }
 
-    /** Dimensions where this attempt scored meaningfully lower than the previous one (top 3). */
-    private List<String> declinedAreas(Map<String, Double> prev, Map<String, Double> cur) {
+    /**
+     * Dimensions that changed meaningfully (≥3 points) versus the previous attempt (top 3
+     * by magnitude). When {@code improved} is true it reports the gains ("Fluency (+12)");
+     * otherwise the declines ("Fluency (-12)").
+     */
+    private List<String> changedAreas(Map<String, Double> prev, Map<String, Double> cur, boolean improved) {
         if (prev == null || cur == null || prev.isEmpty() || cur.isEmpty()) return List.of();
         List<Map.Entry<String, Double>> ranked = new ArrayList<>();
         for (String d : cur.keySet()) {
             Double p = prev.get(d);
             Double c = cur.get(d);
             if (p == null || c == null) continue;
-            double drop = p - c;
-            if (drop >= 3) ranked.add(Map.entry(d, drop)); // only meaningful drops
+            double delta = c - p;                       // positive = improved
+            double magnitude = improved ? delta : -delta;
+            if (magnitude >= 3) ranked.add(Map.entry(d, magnitude)); // only meaningful changes
         }
         ranked.sort(Comparator.comparingDouble((Map.Entry<String, Double> e) -> e.getValue()).reversed());
         List<String> result = new ArrayList<>();
+        String sign = improved ? "+" : "-";
         for (int i = 0; i < Math.min(3, ranked.size()); i++) {
-            result.add(label(ranked.get(i).getKey()) + " (-" + (int) Math.round(ranked.get(i).getValue()) + ")");
+            result.add(label(ranked.get(i).getKey()) + " (" + sign
+                    + (int) Math.round(ranked.get(i).getValue()) + ")");
         }
         return result;
     }

@@ -5,7 +5,10 @@ export const scoreColor = (score) => {
   return 'warning';
 };
 
-export const fmtScore = (score) => (score == null ? '—' : `${Math.round(score)}`);
+// Show the true score, not a rounded one — rounding 74.7 up to "75" contradicts the
+// "below the 75 pass mark" message. Whole numbers show plainly; fractions show 1 decimal.
+export const fmtScore = (score) =>
+  score == null ? '—' : Number.isInteger(score) ? `${score}` : score.toFixed(1);
 
 export const prettySection = (s) =>
   s ? s.charAt(0).toUpperCase() + s.slice(1).toLowerCase() : '';

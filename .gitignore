@@ -3,6 +3,10 @@
 frontend/.env
 backend/.env
 
+# Claude Code — personal, machine-local overrides (never commit)
+CLAUDE.local.md
+.claude/settings.local.json
+
 # Java / Maven
 backend/target/
 *.class

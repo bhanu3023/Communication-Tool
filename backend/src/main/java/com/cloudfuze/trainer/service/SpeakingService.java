@@ -7,6 +7,7 @@ import com.cloudfuze.trainer.dto.speaking.SpeakingDtos;
 import com.cloudfuze.trainer.entity.AssessmentSession;
 import com.cloudfuze.trainer.entity.SpeakingSentence;
 import com.cloudfuze.trainer.entity.User;
+import com.cloudfuze.trainer.repository.SpeakingSentenceRepository;
 import com.cloudfuze.trainer.service.ai.AiService;
 import com.cloudfuze.trainer.service.ai.AzureSpeechService;
 import com.cloudfuze.trainer.service.ai.SpeakingEvaluation;
@@ -35,12 +36,14 @@ public class SpeakingService {
     private final AuditService auditService;
     private final com.cloudfuze.trainer.repository.SpeakingRecordingRepository recordingRepository;
     private final com.cloudfuze.trainer.repository.AssessmentSessionRepository sessionRepository;
+    private final SpeakingSentenceRepository sentenceRepository;
 
     public SpeakingService(SpeakingSetService speakingSetService, SessionService sessionService,
                            AiService aiService, AzureSpeechService azureSpeechService,
                            JsonUtil json, AuditService auditService,
                            com.cloudfuze.trainer.repository.SpeakingRecordingRepository recordingRepository,
-                           com.cloudfuze.trainer.repository.AssessmentSessionRepository sessionRepository) {
+                           com.cloudfuze.trainer.repository.AssessmentSessionRepository sessionRepository,
+                           SpeakingSentenceRepository sentenceRepository) {
         this.speakingSetService = speakingSetService;
         this.sessionService = sessionService;
         this.aiService = aiService;
@@ -49,11 +52,17 @@ public class SpeakingService {
         this.auditService = auditService;
         this.recordingRepository = recordingRepository;
         this.sessionRepository = sessionRepository;
+        this.sentenceRepository = sentenceRepository;
     }
 
     /** Scores one spoken sentence via Azure → OpenAI-audio → transcript fallback. */
     private SpeakingDtos.SpeechItem scoreSentence(SpeakingDtos.SpeechResultInput input) {
-        String expected = input.expected() == null ? "" : input.expected();
+        // Never trust the client's "expected" text — resolve the reference sentence from
+        // the database by id, so a caller can't send expected == transcript for a perfect
+        // score. The transcript is still client-supplied, but it is what gets graded.
+        String expected = sentenceRepository.findById(input.sentenceId())
+                .map(SpeakingSentence::getText)
+                .orElse("");
         String transcript = input.transcript() == null ? "" : input.transcript();
         SpeakingEvaluation eval = null;
 

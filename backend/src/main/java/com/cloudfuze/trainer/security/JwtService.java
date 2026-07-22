@@ -23,6 +23,14 @@ public class JwtService {
 
     public JwtService(@Value("${app.jwt.secret}") String secret,
                       @Value("${app.jwt.expiration-minutes}") long expirationMinutes) {
+        // Fail fast if the app was started without a real JWT secret. A missing, short,
+        // or left-at-default secret lets anyone forge an admin/manager token, so we
+        // refuse to boot rather than run insecurely.
+        if (secret == null || secret.strip().length() < 32 || secret.contains("change-me")) {
+            throw new IllegalStateException(
+                    "APP_JWT_SECRET is missing, too short, or still the default. Set a random "
+                            + "value of at least 32 characters before starting the application.");
+        }
         this.key = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
         this.expirationMinutes = expirationMinutes;
     }
