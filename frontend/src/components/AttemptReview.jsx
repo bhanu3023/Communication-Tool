@@ -45,8 +45,30 @@ function RecordingPlayer({ sessionId, index }) {
   };
 
   if (url) {
-    // eslint-disable-next-line jsx-a11y/media-has-caption
-    return <audio controls src={url} style={{ width: '100%', height: 40, marginTop: 8 }} />;
+    // Some browsers show 0:00 / 0:00 for blob-sourced audio until the duration is
+    // known. Force it to resolve: on metadata load, if the duration is missing/infinite,
+    // seek to the end and back so the element reports the real length.
+    const fixDuration = (e) => {
+      const a = e.currentTarget;
+      if (!Number.isFinite(a.duration) || a.duration === 0) {
+        const onUpdate = () => {
+          a.currentTime = 0;
+          a.removeEventListener('timeupdate', onUpdate);
+        };
+        a.addEventListener('timeupdate', onUpdate);
+        a.currentTime = 1e101; // jump past the end to trigger duration calculation
+      }
+    };
+    return (
+      // eslint-disable-next-line jsx-a11y/media-has-caption
+      <audio
+        controls
+        preload="auto"
+        src={url}
+        onLoadedMetadata={fixDuration}
+        style={{ width: '100%', height: 40, marginTop: 8 }}
+      />
+    );
   }
   return (
     <Button

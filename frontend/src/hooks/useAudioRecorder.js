@@ -98,6 +98,16 @@ export function useAudioRecorder() {
       const AudioCtx = window.AudioContext || window.webkitAudioContext;
       const ctx = new AudioCtx();
       ctxRef.current = ctx;
+      // A context created outside a user gesture (or under stricter autoplay policies
+      // in production) can start "suspended" — then onaudioprocess never fires and the
+      // recording is silent. Resume it before wiring up capture.
+      if (ctx.state === 'suspended') {
+        try {
+          await ctx.resume();
+        } catch {
+          /* ignore — capture may still work */
+        }
+      }
       rateRef.current = ctx.sampleRate;
       const source = ctx.createMediaStreamSource(stream);
       const proc = ctx.createScriptProcessor(4096, 1, 1);
