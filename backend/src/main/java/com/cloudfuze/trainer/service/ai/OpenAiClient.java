@@ -100,11 +100,13 @@ public class OpenAiClient {
             return null;
         }
         try {
+            // NOTE: audio models (gpt-audio*) do NOT support response_format=json_object;
+            // sending it returns 400. We instead instruct JSON in the prompt and parse
+            // the content leniently below.
             Map<String, Object> body = Map.of(
                     "model", audioModel,
                     "modalities", List.of("text"),
                     "temperature", 0.2,
-                    "response_format", Map.of("type", "json_object"),
                     "messages", List.of(
                             Map.of("role", "system", "content", system),
                             Map.of("role", "user", "content", List.of(
@@ -121,10 +123,27 @@ public class OpenAiClient {
                     .body(JsonNode.class);
 
             String content = response.path("choices").path(0).path("message").path("content").asText(null);
-            return content == null ? null : mapper.readTree(content);
+            return parseLooseJson(content);
         } catch (Exception e) {
             log.warn("OpenAI audio call failed, falling back: {}", e.getMessage());
             return null;
         }
+    }
+
+    /**
+     * Parses model output as JSON, tolerating markdown fences or surrounding prose by
+     * extracting the outermost {@code { ... }} object. Returns null if none is found.
+     */
+    private JsonNode parseLooseJson(String content) throws com.fasterxml.jackson.core.JsonProcessingException {
+        if (content == null || content.isBlank()) {
+            return null;
+        }
+        String text = content.trim();
+        int start = text.indexOf('{');
+        int end = text.lastIndexOf('}');
+        if (start >= 0 && end > start) {
+            text = text.substring(start, end + 1);
+        }
+        return mapper.readTree(text);
     }
 }
