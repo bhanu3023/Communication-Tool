@@ -1,6 +1,7 @@
 package com.cloudfuze.trainer.config;
 
 import com.cloudfuze.trainer.security.JwtAuthenticationFilter;
+import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -49,6 +50,14 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers("/api/manager/**").hasRole("MANAGER")
                         .anyRequest().authenticated())
+                // Return 401 (not the default 403) when authentication is missing/expired/invalid,
+                // so the frontend's 401 interceptor clears the dead session and redirects to login.
+                // Role-forbidden requests (valid token, wrong role) still yield 403.
+                .exceptionHandling(ex -> ex
+                        .authenticationEntryPoint((request, response, authException) ->
+                                response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Unauthorized"))
+                        .accessDeniedHandler((request, response, deniedException) ->
+                                response.sendError(HttpServletResponse.SC_FORBIDDEN, "Forbidden")))
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
         return http.build();
     }
