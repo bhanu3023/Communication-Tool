@@ -23,6 +23,12 @@ import { getSpeakingRecording } from '../services/assessmentService';
 import { useSpeechSynthesis } from '../hooks/useSpeechSynthesis';
 import { scoreColor } from '../utils/format';
 
+// Recording PLAYBACK in feedback is temporarily disabled (per request). The audio is
+// still captured, stored, and evaluated on the backend — only the player UI is hidden
+// here (user dashboard + manager view). Flip this to true to bring the
+// "Play my recording" control back.
+const RECORDING_PLAYBACK_ENABLED = false;
+
 /** Lazily loads and plays one sentence's stored recording (fetched with auth). */
 function RecordingPlayer({ sessionId, index }) {
   const [url, setUrl] = useState(null);
@@ -192,8 +198,10 @@ export function SpeakingSection({ details, score, showHeader = true, sessionId, 
                 sx={{ mb: 1.5, color: said ? 'primary.main' : 'error.main', fontStyle: said ? 'normal' : 'italic' }}>
                 {said ? `“${said}”` : 'No speech detected.'}
               </Typography>
-              {sessionId && it.hasAudio && <RecordingPlayer sessionId={sessionId} index={i} />}
-              <Box sx={{ mt: sessionId && it.hasAudio ? 1.5 : 0 }}>
+              {RECORDING_PLAYBACK_ENABLED && sessionId && it.hasAudio && (
+                <RecordingPlayer sessionId={sessionId} index={i} />
+              )}
+              <Box sx={{ mt: RECORDING_PLAYBACK_ENABLED && sessionId && it.hasAudio ? 1.5 : 0 }}>
                 <MetricChips obj={ev}
                   keys={['pronunciation', 'accuracy', 'fluency', 'grammar', 'vocabulary', 'confidence']} />
               </Box>
