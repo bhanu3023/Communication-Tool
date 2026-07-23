@@ -38,10 +38,10 @@ export default function AssessmentHub() {
 
   return (
     <Box>
-      <Paper sx={{ p: 3, mb: 3 }}>
-        <Typography variant="h5">Assessment</Typography>
+      <Paper sx={{ p: 3, mb: 3, borderRadius: 3 }}>
+        <Typography variant="h5">Choose a Test</Typography>
         <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-          Take each section <strong>independently</strong> — Listening, Speaking and Writing each have their own
+          Take them in <strong>any order</strong> — Listening, Speaking and Writing each have their own
           <strong> 3 attempts</strong>. There is no combined score. Each section runs in fullscreen with proctoring.
         </Typography>
       </Paper>

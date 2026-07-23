@@ -1,29 +1,30 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
+  Avatar,
   Box,
   Button,
   Card,
-  CardContent,
   Chip,
   InputAdornment,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  TextField,
+  Paper,
   Typography,
+  TextField,
 } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
-import VisibilityIcon from '@mui/icons-material/Visibility';
+import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
+import GroupsIcon from '@mui/icons-material/GroupsOutlined';
 import LoadingScreen from '../../components/LoadingScreen';
 import { getTeam } from '../../services/assessmentService';
 import { useToast } from '../../contexts/ToastContext';
-import { scoreColor } from '../../utils/format';
 
-const cell = (v) => (v == null ? '—' : v);
+const initialsOf = (name) =>
+  (name || 'U')
+    .split(' ')
+    .map((s) => s[0])
+    .slice(0, 2)
+    .join('')
+    .toUpperCase();
 
 export default function ManagerDashboard() {
   const navigate = useNavigate();
@@ -31,8 +32,6 @@ export default function ManagerDashboard() {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [team, setTeam] = useState('');
-  const [department, setDepartment] = useState('');
 
   const load = useCallback(() => {
     setLoading(true);
@@ -47,101 +46,129 @@ export default function ManagerDashboard() {
     return () => clearTimeout(t);
   }, [load]);
 
+  const open = (id) => navigate(`/manager/employee/${id}`);
+
   return (
     <Box>
       <Typography variant="h4" gutterBottom>
         Team Overview
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-        Review your team members' communication assessment results.
+        Review your team members&apos; communication assessment results.
       </Typography>
 
-      <Card sx={{ mb: 2 }}>
-        <CardContent>
-          <TextField
-            size="small"
-            fullWidth
-            placeholder="Search employee by name or email"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <SearchIcon fontSize="small" />
-                </InputAdornment>
-              ),
-            }}
-          />
-        </CardContent>
-      </Card>
+      {/* Search */}
+      <TextField
+        fullWidth
+        placeholder="Search employee by name or email"
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        sx={{ mb: 3, bgcolor: '#fff', '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
+        InputProps={{
+          startAdornment: (
+            <InputAdornment position="start">
+              <SearchIcon fontSize="small" />
+            </InputAdornment>
+          ),
+        }}
+      />
 
       {loading ? (
         <LoadingScreen rows={5} />
+      ) : rows.length === 0 ? (
+        <Paper sx={{ p: 5, textAlign: 'center', borderRadius: 3 }}>
+          <GroupsIcon sx={{ fontSize: 44, color: 'text.disabled', mb: 1 }} />
+          <Typography variant="h6" gutterBottom>
+            No employees found
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            No one on your team matches this search.
+          </Typography>
+        </Paper>
       ) : (
-        <Card>
-          <TableContainer>
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                  <TableCell>Employee</TableCell>
-                  <TableCell>Email</TableCell>
-                  <TableCell align="center">Listening</TableCell>
-                  <TableCell align="center">Speaking</TableCell>
-                  <TableCell align="center">Writing</TableCell>
-                  <TableCell align="center">Warnings</TableCell>
-                  <TableCell align="center">Requests</TableCell>
-                  <TableCell align="right">Action</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {rows.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={8} align="center">
-                      No employees found.
-                    </TableCell>
-                  </TableRow>
+        <Card sx={{ overflow: 'hidden' }}>
+          {/* Column header */}
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 2,
+              px: 2.5,
+              py: 1.5,
+              bgcolor: '#faf9fe',
+              borderBottom: '1px solid',
+              borderColor: 'divider',
+            }}
+          >
+            <Typography variant="overline" sx={{ flex: 1, color: 'text.secondary', letterSpacing: 0.6 }}>
+              Employee
+            </Typography>
+            <Typography variant="overline" sx={{ width: 160, color: 'text.secondary', letterSpacing: 0.6 }}>
+              Requests
+            </Typography>
+            <Box sx={{ width: 120 }} />
+          </Box>
+
+          {/* One line per user */}
+          {rows.map((r, i) => (
+            <Box
+              key={r.employeeId}
+              onClick={() => open(r.employeeId)}
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 2,
+                px: 2.5,
+                py: 1.75,
+                cursor: 'pointer',
+                borderTop: i === 0 ? 'none' : '1px solid',
+                borderColor: 'divider',
+                transition: 'background .15s',
+                '&:hover': { bgcolor: 'rgba(48,0,174,0.04)' },
+              }}
+            >
+              {/* Name + email */}
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flex: 1, minWidth: 0 }}>
+                <Avatar sx={{ bgcolor: 'primary.main', width: 40, height: 40, fontWeight: 700, fontSize: 15 }}>
+                  {initialsOf(r.name)}
+                </Avatar>
+                <Box sx={{ minWidth: 0 }}>
+                  <Typography fontWeight={600} noWrap>
+                    {r.name}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block' }}>
+                    {r.email}
+                  </Typography>
+                </Box>
+              </Box>
+
+              {/* Requests */}
+              <Box sx={{ width: 160 }}>
+                {r.requestPending ? (
+                  <Chip size="small" color="warning" label="Attempt requested" />
+                ) : (
+                  <Typography variant="body2" color="text.disabled">
+                    —
+                  </Typography>
                 )}
-                {rows.map((r) => {
-                  const scoreCell = (score, attempts) => (
-                    <Box>
-                      <Chip size="small" color={scoreColor(score)} label={cell(score)} />
-                      <Typography variant="caption" color="text.secondary" display="block">
-                        {attempts} / 3 used
-                      </Typography>
-                    </Box>
-                  );
-                  return (
-                    <TableRow key={r.employeeId} hover>
-                      <TableCell>{r.name}</TableCell>
-                      <TableCell>{r.email}</TableCell>
-                      <TableCell align="center">{scoreCell(r.listeningScore, r.listeningAttempts)}</TableCell>
-                      <TableCell align="center">{scoreCell(r.speakingScore, r.speakingAttempts)}</TableCell>
-                      <TableCell align="center">{scoreCell(r.writingScore, r.writingAttempts)}</TableCell>
-                      <TableCell align="center">
-                        <Chip size="small" color={r.totalWarnings > 0 ? 'error' : 'default'} label={r.totalWarnings} />
-                      </TableCell>
-                      <TableCell align="center">
-                        {r.requestPending ? (
-                          <Chip size="small" color="warning" label="Pending" />
-                        ) : (
-                          '—'
-                        )}
-                      </TableCell>
-                      <TableCell align="right">
-                        <Button
-                          size="small"
-                          startIcon={<VisibilityIcon />}
-                          onClick={() => navigate(`/manager/employee/${r.employeeId}`)}
-                        >
-                          View
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </TableContainer>
+              </Box>
+
+              {/* View */}
+              <Box sx={{ width: 120, textAlign: 'right' }}>
+                <Button
+                  size="small"
+                  variant="contained"
+                  endIcon={<ArrowForwardIcon />}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    open(r.employeeId);
+                  }}
+                >
+                  View
+                </Button>
+              </Box>
+            </Box>
+          ))}
         </Card>
       )}
     </Box>

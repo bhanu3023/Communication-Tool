@@ -13,7 +13,7 @@ const theme = createTheme({
   },
   shape: { borderRadius: 14 },
   typography: {
-    fontFamily: "'Inter', system-ui, sans-serif",
+    fontFamily: "'Poppins', system-ui, sans-serif",
     h4: { fontWeight: 700 },
     h5: { fontWeight: 700 },
     h6: { fontWeight: 600 },

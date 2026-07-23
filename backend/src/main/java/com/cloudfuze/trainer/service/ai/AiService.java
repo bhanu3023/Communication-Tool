@@ -158,8 +158,47 @@ public class AiService {
         return mock.summarizeListening(correct, total);
     }
 
+    /**
+     * Detailed, section-aware overall coaching. Uses OpenAI with a prompt that forces
+     * every point to name the section it refers to; falls back to the (also section-aware)
+     * mock evaluator on any error or when no key/quota is available.
+     */
     public OverallFeedback buildOverall(Double listening, Double speaking, Double writing) {
-        return mock.buildOverall(listening, speaking, writing);
+        String status = "The employee's LATEST score per section (0-100, pass mark 75; "
+                + "\"NOT ATTEMPTED\" means they have not taken it yet):\n"
+                + "- Listening: " + fmtScore(listening) + "\n"
+                + "- Speaking: " + fmtScore(speaking) + "\n"
+                + "- Writing: " + fmtScore(writing);
+        JsonNode node = openAi.completeJson(
+                "You are a supportive but honest communication-skills coach for a CloudFuze employee. "
+                        + "You are given the employee's latest score in three INDEPENDENT sections — "
+                        + "Listening, Speaking and Writing (some may be NOT ATTEMPTED). Write DETAILED, "
+                        + "SECTION-SPECIFIC feedback: every single point MUST start by naming the section it "
+                        + "is about (e.g. \"Speaking (76/100): ...\"). Never give vague, generic praise. For a "
+                        + "NOT ATTEMPTED section, do not invent a score — instead encourage the employee to take "
+                        + "that test. Score bands: 90-100 excellent, 75-89 good (passes), 60-74 needs work, below "
+                        + "60 weak. Return JSON with three arrays of clear full-sentence strings: \"strengths\" "
+                        + "(what is going well and why, per section), \"weaknesses\" (what specifically needs "
+                        + "improvement, per section, constructive), and \"suggestions\" (concrete, actionable next "
+                        + "steps per section — what to practice, and to retake to track progress). Give 1-3 items "
+                        + "per array and NEVER return an empty array — if there is nothing to praise or fix yet, "
+                        + "guide the employee on how to get started.",
+                status);
+        if (node == null) {
+            return mock.buildOverall(listening, speaking, writing);
+        }
+        List<String> strengths = strings(node, "strengths");
+        List<String> weaknesses = strings(node, "weaknesses");
+        List<String> suggestions = strings(node, "suggestions");
+        // If the model returned nothing usable, fall back so the panel is never empty.
+        if (strengths.isEmpty() && weaknesses.isEmpty() && suggestions.isEmpty()) {
+            return mock.buildOverall(listening, speaking, writing);
+        }
+        return new OverallFeedback(strengths, weaknesses, suggestions);
+    }
+
+    private String fmtScore(Double s) {
+        return s == null ? "NOT ATTEMPTED" : String.valueOf(Math.round(s)) + "/100";
     }
 
     // --- helpers ---

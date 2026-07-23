@@ -19,6 +19,7 @@ import MicIcon from '@mui/icons-material/Mic';
 import EditNoteIcon from '@mui/icons-material/EditNote';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import VolumeUpIcon from '@mui/icons-material/VolumeUp';
+import LightbulbOutlinedIcon from '@mui/icons-material/LightbulbOutlined';
 import { getSpeakingRecording } from '../services/assessmentService';
 import { useSpeechSynthesis } from '../hooks/useSpeechSynthesis';
 import { scoreColor } from '../utils/format';
@@ -104,6 +105,46 @@ function MetricChips({ obj, keys }) {
   );
 }
 
+// Speaking sub-score dimensions (label + evaluation key).
+const SPEAKING_DIMS = [
+  ['Pronunciation', 'pronunciation'],
+  ['Accuracy', 'accuracy'],
+  ['Fluency', 'fluency'],
+  ['Grammar', 'grammar'],
+  ['Vocabulary', 'vocabulary'],
+  ['Confidence', 'confidence'],
+];
+
+/** A compact, colored stat tile for one speaking sub-score. */
+function SubScore({ label, value }) {
+  const c = scoreColor(value); // 'success' | 'warning' | 'error'
+  return (
+    <Box
+      sx={{
+        flex: '1 1 92px',
+        minWidth: 92,
+        border: '1px solid',
+        borderColor: 'divider',
+        borderRadius: 2,
+        px: 1.25,
+        py: 0.85,
+        textAlign: 'center',
+      }}
+    >
+      <Typography
+        variant="caption"
+        color="text.secondary"
+        sx={{ display: 'block', fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.4 }}
+      >
+        {label}
+      </Typography>
+      <Typography sx={{ fontWeight: 700, lineHeight: 1.2, color: `${c}.main` }}>
+        {Math.round(value)}
+      </Typography>
+    </Box>
+  );
+}
+
 function SectionHeader({ icon, title, score, color }) {
   return (
     <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1.5 }}>
@@ -176,41 +217,116 @@ export function SpeakingSection({ details, score, showHeader = true, sessionId, 
         speaking.items.map((it, i) => {
           const ev = it.evaluation || {};
           const said = (it.transcript || '').trim();
+          const tips = Array.isArray(ev.suggestions) ? ev.suggestions : [];
           return (
-            <Paper variant="outlined" key={i} sx={{ p: 2, mb: 1.5 }}>
-              <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
-                <Typography variant="caption" color="text.secondary">Sentence {i + 1}</Typography>
+            <Paper variant="outlined" key={i} sx={{ p: 2.5, mb: 2, borderRadius: 3 }}>
+              {/* Header: sentence number + overall score badge */}
+              <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                  Sentence {i + 1}
+                </Typography>
                 {ev.overall != null && (
-                  <Chip size="small" color={scoreColor(ev.overall)} label={`${Math.round(ev.overall)} / 100`} />
+                  <Chip
+                    size="small"
+                    color={scoreColor(ev.overall)}
+                    label={`${Math.round(ev.overall)} / 100`}
+                    sx={{ fontWeight: 700 }}
+                  />
                 )}
               </Stack>
-              <Typography variant="caption" color="text.secondary">Target</Typography>
-              <Typography variant="body2" sx={{ mb: 0.5, fontWeight: 500 }}>“{it.expected}”</Typography>
-              {/* "Hear how to say it" is a learning aid for the employee — hidden in the
-                  manager view, but the Target text stays so the manager can see what was expected. */}
-              {!managerView && tts.supported && (
-                <Button size="small" startIcon={<VolumeUpIcon />} onClick={() => tts.speak(it.expected)} sx={{ mb: 1.5 }}>
-                  Hear how to say it
-                </Button>
-              )}
-              <Typography variant="caption" color="text.secondary" display="block">You said</Typography>
-              <Typography variant="body2"
-                sx={{ mb: 1.5, color: said ? 'primary.main' : 'error.main', fontStyle: said ? 'normal' : 'italic' }}>
-                {said ? `“${said}”` : 'No speech detected.'}
-              </Typography>
-              {RECORDING_PLAYBACK_ENABLED && sessionId && it.hasAudio && (
-                <RecordingPlayer sessionId={sessionId} index={i} />
-              )}
-              <Box sx={{ mt: RECORDING_PLAYBACK_ENABLED && sessionId && it.hasAudio ? 1.5 : 0 }}>
-                <MetricChips obj={ev}
-                  keys={['pronunciation', 'accuracy', 'fluency', 'grammar', 'vocabulary', 'confidence']} />
+
+              {/* Target */}
+              <Box sx={{ bgcolor: '#f6f7fb', border: '1px solid #eef2f8', borderRadius: 2, p: 1.5, mb: 1.5 }}>
+                <Stack direction="row" justifyContent="space-between" alignItems="flex-start" spacing={1}>
+                  <Box>
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                      sx={{ display: 'block', fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.5 }}
+                    >
+                      Target
+                    </Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                      “{it.expected}”
+                    </Typography>
+                  </Box>
+                  {/* Learning aid for the employee — hidden in the manager view. */}
+                  {!managerView && tts.supported && (
+                    <Button
+                      size="small"
+                      startIcon={<VolumeUpIcon />}
+                      onClick={() => tts.speak(it.expected)}
+                      sx={{ flexShrink: 0 }}
+                    >
+                      Hear it
+                    </Button>
+                  )}
+                </Stack>
               </Box>
-              {Array.isArray(ev.suggestions) && ev.suggestions.length > 0 && (
-                <Box sx={{ mt: 1 }}>
-                  <Typography variant="caption" color="text.secondary">How to improve</Typography>
-                  <Box component="ul" sx={{ m: '4px 0 0', pl: 2.5 }}>
-                    {ev.suggestions.map((s, j) => (
-                      <Typography key={j} component="li" variant="body2">{s}</Typography>
+
+              {/* You said */}
+              <Box
+                sx={{
+                  borderRadius: 2,
+                  p: 1.5,
+                  mb: 2,
+                  bgcolor: said ? 'rgba(46,125,50,0.06)' : 'rgba(198,40,40,0.06)',
+                  border: '1px solid',
+                  borderColor: said ? 'rgba(46,125,50,0.22)' : 'rgba(198,40,40,0.22)',
+                }}
+              >
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{ display: 'block', fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.5 }}
+                >
+                  You said
+                </Typography>
+                <Typography
+                  variant="body2"
+                  sx={{ color: said ? 'text.primary' : 'error.main', fontStyle: said ? 'normal' : 'italic' }}
+                >
+                  {said ? `“${said}”` : 'No speech detected.'}
+                </Typography>
+              </Box>
+
+              {RECORDING_PLAYBACK_ENABLED && sessionId && it.hasAudio && (
+                <Box sx={{ mb: 2 }}>
+                  <RecordingPlayer sessionId={sessionId} index={i} />
+                </Box>
+              )}
+
+              {/* Sub-scores as clean stat tiles */}
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: tips.length ? 2 : 0 }}>
+                {SPEAKING_DIMS.map(([label, key]) =>
+                  ev[key] != null ? <SubScore key={key} label={label} value={ev[key]} /> : null,
+                )}
+              </Box>
+
+              {/* How to improve — highlighted callout */}
+              {tips.length > 0 && (
+                <Box
+                  sx={{
+                    bgcolor: 'rgba(48,0,174,0.04)',
+                    border: '1px solid rgba(48,0,174,0.14)',
+                    borderRadius: 2,
+                    p: 1.5,
+                  }}
+                >
+                  <Stack direction="row" spacing={0.75} alignItems="center" sx={{ mb: 0.5 }}>
+                    <LightbulbOutlinedIcon fontSize="small" color="primary" />
+                    <Typography
+                      variant="caption"
+                      sx={{ fontWeight: 700, color: 'primary.main', textTransform: 'uppercase', letterSpacing: 0.5 }}
+                    >
+                      How to improve
+                    </Typography>
+                  </Stack>
+                  <Box component="ul" sx={{ m: 0, pl: 2.5 }}>
+                    {tips.map((s, j) => (
+                      <Typography key={j} component="li" variant="body2" sx={{ mb: 0.25 }}>
+                        {s}
+                      </Typography>
                     ))}
                   </Box>
                 </Box>

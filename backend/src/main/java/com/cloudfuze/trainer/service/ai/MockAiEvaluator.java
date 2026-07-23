@@ -122,25 +122,52 @@ public class MockAiEvaluator {
     }
 
     public OverallFeedback buildOverall(Double listening, Double speaking, Double writing) {
+        record Sec(String name, Double score) {}
+        List<Sec> secs = Arrays.asList(
+                new Sec("Listening", listening),
+                new Sec("Speaking", speaking),
+                new Sec("Writing", writing));
+
         List<String> strengths = new ArrayList<>();
         List<String> weaknesses = new ArrayList<>();
         List<String> suggestions = new ArrayList<>();
-        record Pair(String name, Double score) {}
-        List<Pair> scores = Arrays.asList(
-                new Pair("Listening", listening),
-                new Pair("Speaking", speaking),
-                new Pair("Writing", writing));
-        for (Pair p : scores) {
-            if (p.score() == null) continue;
-            if (p.score() >= 80) strengths.add(p.name() + " is a clear strength (" + round(p.score()) + ").");
-            else if (p.score() < 65) weaknesses.add(p.name() + " needs focused improvement (" + round(p.score()) + ").");
+
+        // Detailed, section-by-section read on the latest scores (pass mark 75).
+        for (Sec s : secs) {
+            if (s.score() == null) {
+                weaknesses.add(s.name() + ": not attempted yet — take this test to get a score and detailed feedback.");
+                suggestions.add("Start the " + s.name() + " test to complete your communication profile.");
+                continue;
+            }
+            double v = round(s.score());
+            if (v >= 85) {
+                strengths.add(s.name() + " is excellent (" + v + "/100) — clear, confident and effective.");
+            } else if (v >= 75) {
+                strengths.add(s.name() + " passes the bar (" + v + "/100, pass mark 75) — solid, with a little room to sharpen.");
+            } else if (v >= 60) {
+                weaknesses.add(s.name() + " is just below the pass mark (" + v + "/100, need 75) — focused practice should close the gap.");
+            } else {
+                weaknesses.add(s.name() + " needs the most work (" + v + "/100) — make this your top priority.");
+            }
         }
-        scores.stream()
-                .filter(p -> p.score() != null)
+
+        // Prioritise the lowest ATTEMPTED section, then a general nudge.
+        secs.stream()
+                .filter(s -> s.score() != null)
                 .min((a, b) -> Double.compare(a.score(), b.score()))
-                .ifPresent(p -> suggestions.add("Prioritize practice in " + p.name() + " over the next two weeks."));
-        suggestions.add("Retake the assessment to track improvement over time.");
-        if (strengths.isEmpty()) strengths.add("Consistent effort across all three sections.");
+                .ifPresent(s -> suggestions.add("Prioritise " + s.name() + " practice over the next two weeks."));
+        suggestions.add("Retake a section to track your improvement over time.");
+
+        // Never leave a column empty (avoids a bare "No data yet.").
+        if (strengths.isEmpty()) {
+            boolean anyAttempted = secs.stream().anyMatch(s -> s.score() != null);
+            strengths.add(anyAttempted
+                    ? "Consistent effort so far — keep practising to turn these into clear strengths."
+                    : "Ready to begin — complete a section to start building your strengths.");
+        }
+        if (weaknesses.isEmpty()) {
+            weaknesses.add("No major weaknesses — keep pushing your scores even higher.");
+        }
         return new OverallFeedback(strengths, weaknesses, suggestions);
     }
 
