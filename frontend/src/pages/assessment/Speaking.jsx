@@ -38,6 +38,11 @@ import { useExamMode } from '../../hooks/useExamMode';
 import { recordViolation, startSpeaking, submitSpeaking } from '../../services/assessmentService';
 import { useToast } from '../../contexts/ToastContext';
 
+// Recording PLAYBACK on the results screen is temporarily disabled (per request).
+// The audio is still recorded and sent to the backend so the ACTUAL voice is evaluated
+// — only the playback player is hidden. Flip to true to restore it.
+const RECORDING_PLAYBACK_ENABLED = false;
+
 const INTRO_STEPS = [
   { icon: HeadphonesIcon, title: 'Wear earphones', desc: 'Put on your earphones for the clearest recording.' },
   { icon: MenuBookIcon, title: 'Read the sentence aloud', desc: 'A business-migration sentence appears — read it clearly and naturally.' },
@@ -555,7 +560,7 @@ export default function Speaking() {
                 {(() => {
                   const sid = sentences[i]?.id;
                   const audioSrc = sid != null ? resultsRef.current[sid]?.audio : null;
-                  return audioSrc ? (
+                  return RECORDING_PLAYBACK_ENABLED && audioSrc ? (
                     <Box sx={{ mb: 2 }}>
                       <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
                         Your recording — listen to what you said
