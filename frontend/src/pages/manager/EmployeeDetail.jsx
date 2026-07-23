@@ -132,9 +132,6 @@ export default function EmployeeDetail() {
             <CardContent>
               <Typography variant="h6" gutterBottom>{detail.name}</Typography>
               <Typography variant="body2" color="text.secondary" gutterBottom>{detail.email}</Typography>
-              <Divider sx={{ my: 1 }} />
-              <ProfileRow label="Team" value={detail.team} />
-              <ProfileRow label="Manager" value={detail.manager} />
             </CardContent>
           </Card>
 
