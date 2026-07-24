@@ -5,11 +5,13 @@ import com.cloudfuze.trainer.domain.Section;
 import com.cloudfuze.trainer.dto.dashboard.DashboardDtos;
 import com.cloudfuze.trainer.dto.manager.ManagerDtos;
 import com.cloudfuze.trainer.entity.User;
+import com.cloudfuze.trainer.exception.ApiException;
 import com.cloudfuze.trainer.exception.ResourceNotFoundException;
 import com.cloudfuze.trainer.repository.ProctorEventRepository;
 import com.cloudfuze.trainer.repository.UserRepository;
 import com.cloudfuze.trainer.service.ai.AiService;
 import com.cloudfuze.trainer.service.ai.OverallFeedback;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -18,7 +20,9 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 /** Team overview and per-employee, per-section detail for managers. */
@@ -47,6 +51,49 @@ public class ManagerService {
                 .filter(e -> matches(e, search, team, department))
                 .map(this::toRow)
                 .toList();
+    }
+
+    /** All current managers (for the admin "Manager Access" screen). */
+    public List<ManagerDtos.ManagerRow> managers() {
+        return userRepository.findByRole(Role.MANAGER).stream()
+                .map(u -> new ManagerDtos.ManagerRow(u.getId(), u.getName(), u.getEmail()))
+                .toList();
+    }
+
+    /**
+     * Grant manager access to the user with the given email. If the user already
+     * exists they are promoted to MANAGER; otherwise a manager account is created so
+     * the role is in place before their first Microsoft login.
+     */
+    @Transactional
+    public void grantManager(String email) {
+        String normalized = email == null ? "" : email.trim();
+        if (normalized.isBlank()) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Email is required");
+        }
+        User user = userRepository.findByEmailIgnoreCase(normalized).orElseGet(() -> {
+            User u = new User();
+            u.setEmail(normalized);
+            u.setName(nameFromEmail(normalized));
+            u.setEmployeeId("MGR-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase(Locale.ROOT));
+            return u;
+        });
+        user.setRole(Role.MANAGER);
+        user.setManager(null); // managers sit at the top of the hierarchy
+        userRepository.save(user);
+    }
+
+    /** Derive a display name from an email local-part, e.g. "bhanu.srikakulam" -> "Bhanu Srikakulam". */
+    private String nameFromEmail(String email) {
+        String local = email.contains("@") ? email.substring(0, email.indexOf('@')) : email;
+        String[] parts = local.split("[._-]+");
+        StringBuilder sb = new StringBuilder();
+        for (String p : parts) {
+            if (p.isBlank()) continue;
+            if (sb.length() > 0) sb.append(' ');
+            sb.append(Character.toUpperCase(p.charAt(0))).append(p.substring(1));
+        }
+        return sb.length() == 0 ? email : sb.toString();
     }
 
     private Map<String, DashboardDtos.SectionCard> cardsBySection(User employee) {

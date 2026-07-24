@@ -30,6 +30,14 @@ public final class ManagerDtos {
     public record WarningRow(int attemptNumber, String section, String dateTime, String reason) {
     }
 
+    /** A manager in the "Manager Access" admin list. */
+    public record ManagerRow(Long id, String name, String email) {
+    }
+
+    /** Request to grant manager access to a user by email. */
+    public record GrantManagerRequest(String email) {
+    }
+
     public record EmployeeDetail(
             Long employeeId,
             String name,

@@ -3,6 +3,7 @@ import SpaceDashboardIcon from '@mui/icons-material/SpaceDashboardOutlined';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesomeOutlined';
 import RateReviewIcon from '@mui/icons-material/RateReviewOutlined';
 import GroupsIcon from '@mui/icons-material/GroupsOutlined';
+import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettingsOutlined';
 import ProtectedRoute from './components/ProtectedRoute';
 import DashboardLayout from './layouts/DashboardLayout';
 import Login from './pages/Login';
@@ -15,6 +16,7 @@ import Speaking from './pages/assessment/Speaking';
 import Writing from './pages/assessment/Writing';
 import ManagerDashboard from './pages/manager/ManagerDashboard';
 import EmployeeDetail from './pages/manager/EmployeeDetail';
+import ManagerAccess from './pages/manager/ManagerAccess';
 
 // Sidebar nav for each role (label, icon, path, active-match).
 const EMPLOYEE_NAV = [
@@ -24,7 +26,14 @@ const EMPLOYEE_NAV = [
 ];
 
 const MANAGER_NAV = [
-  { label: 'Team', icon: <GroupsIcon />, path: '/manager', match: (p) => p.startsWith('/manager') },
+  { label: 'Team', icon: <GroupsIcon />, path: '/manager', match: (p) => p === '/manager' || p.startsWith('/manager/employee') },
+  {
+    label: 'Manager Access',
+    icon: <AdminPanelSettingsIcon />,
+    path: '/manager/access',
+    match: (p) => p.startsWith('/manager/access'),
+    adminOnly: true,
+  },
 ];
 
 export default function App() {
@@ -58,6 +67,7 @@ export default function App() {
         }
       >
         <Route path="/manager" element={<ManagerDashboard />} />
+        <Route path="/manager/access" element={<ManagerAccess />} />
         <Route path="/manager/employee/:id" element={<EmployeeDetail />} />
       </Route>
 
