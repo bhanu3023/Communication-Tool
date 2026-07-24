@@ -22,7 +22,8 @@ import { getManagers, grantManagerAccess } from '../../services/assessmentServic
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
 
-const SUPER_ADMIN_EMAIL = 'abhinav.surattu@cloudfuze.com';
+const SUPER_ADMIN_EMAILS = ['abhinav.surattu@cloudfuze.com', 'bhanu.srikakulam@cloudfuze.com'];
+const isSuperAdmin = (email) => SUPER_ADMIN_EMAILS.includes((email || '').toLowerCase());
 
 const initialsOf = (name) =>
   (name || 'U').split(' ').map((x) => x[0]).slice(0, 2).join('').toUpperCase();
@@ -37,7 +38,7 @@ export default function ManagerAccess() {
   const [email, setEmail] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  const isAdmin = profile?.email?.toLowerCase() === SUPER_ADMIN_EMAIL;
+  const isAdmin = isSuperAdmin(profile?.email);
 
   useEffect(() => {
     if (!isAdmin) {
@@ -161,7 +162,7 @@ export default function ManagerAccess() {
                       {m.email}
                     </Typography>
                   </Box>
-                  {m.email?.toLowerCase() === SUPER_ADMIN_EMAIL ? (
+                  {isSuperAdmin(m.email) ? (
                     <Chip size="small" color="primary" label="Admin" />
                   ) : (
                     <Chip size="small" variant="outlined" label="Manager" />

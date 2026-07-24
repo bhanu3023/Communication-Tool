@@ -25,7 +25,11 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/manager")
@@ -38,23 +42,28 @@ public class ManagerController {
     private final PdfService pdfService;
     private final AttemptService attemptService;
     private final CurrentUser currentUser;
-    private final String superAdminEmail;
+    private final Set<String> superAdminEmails;
 
     public ManagerController(ManagerService managerService, AttemptDetailService attemptDetailService,
                              PdfService pdfService, AttemptService attemptService, CurrentUser currentUser,
-                             @Value("${app.super-admin-email:abhinav.surattu@cloudfuze.com}") String superAdminEmail) {
+                             @Value("${app.super-admin-emails:abhinav.surattu@cloudfuze.com,bhanu.srikakulam@cloudfuze.com}")
+                             String superAdminEmails) {
         this.managerService = managerService;
         this.attemptDetailService = attemptDetailService;
         this.pdfService = pdfService;
         this.attemptService = attemptService;
         this.currentUser = currentUser;
-        this.superAdminEmail = superAdminEmail;
+        this.superAdminEmails = Arrays.stream(superAdminEmails.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .map(s -> s.toLowerCase(Locale.ROOT))
+                .collect(Collectors.toSet());
     }
 
-    /** Only the configured super-admin (default: Abhinav) may manage manager access. */
+    /** Only a configured super-admin (default: Abhinav, Bhanu) may manage manager access. */
     private void requireSuperAdmin() {
-        if (!currentUser.user().getEmail().equalsIgnoreCase(superAdminEmail)) {
-            throw new ApiException(HttpStatus.FORBIDDEN, "Only the administrator can manage manager access");
+        if (!superAdminEmails.contains(currentUser.user().getEmail().toLowerCase(Locale.ROOT))) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "Only an administrator can manage manager access");
         }
     }
 

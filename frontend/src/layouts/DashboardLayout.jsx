@@ -28,9 +28,9 @@ import { useAuth } from '../contexts/AuthContext';
 const EXPANDED_WIDTH = 256;
 const COLLAPSED_WIDTH = 76;
 
-// Only this user sees nav items flagged `adminOnly` (e.g. Manager Access).
+// Only these users see nav items flagged `adminOnly` (e.g. Manager Access).
 // The backend independently enforces this too.
-const SUPER_ADMIN_EMAIL = 'abhinav.surattu@cloudfuze.com';
+const SUPER_ADMIN_EMAILS = ['abhinav.surattu@cloudfuze.com', 'bhanu.srikakulam@cloudfuze.com'];
 
 /**
  * Shared app shell with a collapsible CloudFuze-indigo sidebar. The nav entries
@@ -88,7 +88,7 @@ export default function DashboardLayout({ nav = [] }) {
       )}
       <List sx={{ px: mini ? 1 : 1.5, pt: mini ? 1.5 : 0, flexGrow: 1 }}>
         {nav
-          .filter((item) => !item.adminOnly || profile?.email?.toLowerCase() === SUPER_ADMIN_EMAIL)
+          .filter((item) => !item.adminOnly || SUPER_ADMIN_EMAILS.includes(profile?.email?.toLowerCase()))
           .map((item) => {
           const active = item.match(location.pathname);
           const button = (
