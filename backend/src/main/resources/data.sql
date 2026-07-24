@@ -24,7 +24,7 @@ FROM (VALUES
     ('CF-1001', 'Abhishek Sakala',  'Abhishek.Sakala@cloudfuze.com'),
     ('CF-1009', 'Abhinav Surattu',  'Abhinav.surattu@cloudfuze.com'),
     ('CF-1010', 'Ajay Singh',       'ajay.singh@cloudfuze.com'),
-    ('CF-1011', 'Bhanu Srikakulam', 'bhanu.srikakulam@cloudfuze.com')
+    ('CF-1011', 'Bhanu Srikakulam', 'Bhanu.Srikakulam@cloudfuze.com')
     ) AS v(emp, name, email)
 JOIN department d ON d.name = 'Migration'
 JOIN team t ON t.name = 'Migration'
