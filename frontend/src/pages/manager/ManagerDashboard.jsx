@@ -32,6 +32,7 @@ export default function ManagerDashboard() {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [status, setStatus] = useState('all'); // 'all' | 'attempted' | 'not_attempted'
 
   const load = useCallback(() => {
     setLoading(true);
@@ -48,6 +49,27 @@ export default function ManagerDashboard() {
 
   const open = (id) => navigate(`/manager/employee/${id}`);
 
+  const hasAttempted = (r) =>
+    (r.listeningAttempts || 0) + (r.speakingAttempts || 0) + (r.writingAttempts || 0) > 0;
+
+  const counts = {
+    all: rows.length,
+    attempted: rows.filter(hasAttempted).length,
+    not_attempted: rows.filter((r) => !hasAttempted(r)).length,
+  };
+
+  const filteredRows = rows.filter((r) => {
+    if (status === 'attempted') return hasAttempted(r);
+    if (status === 'not_attempted') return !hasAttempted(r);
+    return true;
+  });
+
+  const statusFilters = [
+    { key: 'all', label: 'All' },
+    { key: 'attempted', label: 'Attempted' },
+    { key: 'not_attempted', label: 'Not attempted' },
+  ];
+
   return (
     <Box>
       <Typography variant="h4" gutterBottom>
@@ -63,7 +85,7 @@ export default function ManagerDashboard() {
         placeholder="Search employee by name or email"
         value={search}
         onChange={(e) => setSearch(e.target.value)}
-        sx={{ mb: 3, bgcolor: '#fff', '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
+        sx={{ mb: 2, bgcolor: '#fff', '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
         InputProps={{
           startAdornment: (
             <InputAdornment position="start">
@@ -73,16 +95,37 @@ export default function ManagerDashboard() {
         }}
       />
 
+      {/* Attempt-status filter */}
+      <Box sx={{ display: 'flex', gap: 1, mb: 3, flexWrap: 'wrap' }}>
+        {statusFilters.map((f) => {
+          const active = status === f.key;
+          return (
+            <Chip
+              key={f.key}
+              label={`${f.label} (${counts[f.key]})`}
+              onClick={() => setStatus(f.key)}
+              variant={active ? 'filled' : 'outlined'}
+              color={active ? 'primary' : 'default'}
+              sx={{ fontWeight: 600, borderRadius: 2, cursor: 'pointer' }}
+            />
+          );
+        })}
+      </Box>
+
       {loading ? (
         <LoadingScreen rows={5} />
-      ) : rows.length === 0 ? (
+      ) : filteredRows.length === 0 ? (
         <Paper sx={{ p: 5, textAlign: 'center', borderRadius: 3 }}>
           <GroupsIcon sx={{ fontSize: 44, color: 'text.disabled', mb: 1 }} />
           <Typography variant="h6" gutterBottom>
             No employees found
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            No one on your team matches this search.
+            {status === 'attempted'
+              ? 'No one on your team has attempted an assessment yet.'
+              : status === 'not_attempted'
+                ? 'Everyone on your team has attempted at least one assessment.'
+                : 'No one on your team matches this search.'}
           </Typography>
         </Paper>
       ) : (
@@ -110,7 +153,7 @@ export default function ManagerDashboard() {
           </Box>
 
           {/* One line per user */}
-          {rows.map((r, i) => (
+          {filteredRows.map((r, i) => (
             <Box
               key={r.employeeId}
               onClick={() => open(r.employeeId)}
