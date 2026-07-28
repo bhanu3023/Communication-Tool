@@ -76,6 +76,12 @@ public class ManagerController {
         return managerService.team(currentUser.user(), search, team, department);
     }
 
+    @Operation(summary = "List the available team names for the Team Overview filter")
+    @GetMapping("/teams")
+    public List<String> teams() {
+        return managerService.teamNames();
+    }
+
     @Operation(summary = "Get the full detail for one team member")
     @GetMapping("/employee/{id}")
     public ManagerDtos.EmployeeDetail employee(@PathVariable Long id) {

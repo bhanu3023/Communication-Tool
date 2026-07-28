@@ -6,16 +6,20 @@ import {
   Button,
   Card,
   Chip,
+  FormControl,
   InputAdornment,
+  MenuItem,
   Paper,
+  Select,
   Typography,
   TextField,
 } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import GroupsIcon from '@mui/icons-material/GroupsOutlined';
+import GroupWorkIcon from '@mui/icons-material/GroupWorkOutlined';
 import LoadingScreen from '../../components/LoadingScreen';
-import { getTeam } from '../../services/assessmentService';
+import { getTeam, getTeams } from '../../services/assessmentService';
 import { useToast } from '../../contexts/ToastContext';
 
 const initialsOf = (name) =>
@@ -33,19 +37,27 @@ export default function ManagerDashboard() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('all'); // 'all' | 'attempted' | 'not_attempted'
+  const [team, setTeam] = useState(''); // '' = all teams
+  const [teams, setTeams] = useState([]);
 
   const load = useCallback(() => {
     setLoading(true);
-    getTeam({ search: search || undefined })
+    getTeam({ search: search || undefined, team: team || undefined })
       .then(setRows)
       .catch(() => showToast('Failed to load team', 'error'))
       .finally(() => setLoading(false));
-  }, [search, showToast]);
+  }, [search, team, showToast]);
 
   useEffect(() => {
     const t = setTimeout(load, 300); // debounce search
     return () => clearTimeout(t);
   }, [load]);
+
+  useEffect(() => {
+    getTeams()
+      .then(setTeams)
+      .catch(() => {}); // filter is optional — silently degrade if teams can't load
+  }, []);
 
   const open = (id) => navigate(`/manager/employee/${id}`);
 
@@ -95,21 +107,53 @@ export default function ManagerDashboard() {
         }}
       />
 
-      {/* Attempt-status filter */}
-      <Box sx={{ display: 'flex', gap: 1, mb: 3, flexWrap: 'wrap' }}>
-        {statusFilters.map((f) => {
-          const active = status === f.key;
-          return (
-            <Chip
-              key={f.key}
-              label={`${f.label} (${counts[f.key]})`}
-              onClick={() => setStatus(f.key)}
-              variant={active ? 'filled' : 'outlined'}
-              color={active ? 'primary' : 'default'}
-              sx={{ fontWeight: 600, borderRadius: 2, cursor: 'pointer' }}
-            />
-          );
-        })}
+      {/* Filters: team (left) + attempt status (right) */}
+      <Box
+        sx={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: 1.5,
+          mb: 3,
+        }}
+      >
+        <FormControl size="small" sx={{ minWidth: 210 }}>
+          <Select
+            value={team}
+            onChange={(e) => setTeam(e.target.value)}
+            displayEmpty
+            startAdornment={
+              <InputAdornment position="start">
+                <GroupWorkIcon fontSize="small" sx={{ color: 'text.secondary' }} />
+              </InputAdornment>
+            }
+            sx={{ bgcolor: '#fff', borderRadius: 2 }}
+          >
+            <MenuItem value="">All teams</MenuItem>
+            {teams.map((t) => (
+              <MenuItem key={t} value={t}>
+                {t}
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+
+        <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+          {statusFilters.map((f) => {
+            const active = status === f.key;
+            return (
+              <Chip
+                key={f.key}
+                label={`${f.label} (${counts[f.key]})`}
+                onClick={() => setStatus(f.key)}
+                variant={active ? 'filled' : 'outlined'}
+                color={active ? 'primary' : 'default'}
+                sx={{ fontWeight: 600, borderRadius: 2, cursor: 'pointer' }}
+              />
+            );
+          })}
+        </Box>
       </Box>
 
       {loading ? (
@@ -122,10 +166,12 @@ export default function ManagerDashboard() {
           </Typography>
           <Typography variant="body2" color="text.secondary">
             {status === 'attempted'
-              ? 'No one on your team has attempted an assessment yet.'
+              ? 'No one here has attempted an assessment yet.'
               : status === 'not_attempted'
-                ? 'Everyone on your team has attempted at least one assessment.'
-                : 'No one on your team matches this search.'}
+                ? 'Everyone here has attempted at least one assessment.'
+                : team
+                  ? `No employees are in the "${team}" team yet.`
+                  : 'No one on your team matches this search.'}
           </Typography>
         </Paper>
       ) : (

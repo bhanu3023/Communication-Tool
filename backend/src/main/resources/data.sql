@@ -10,12 +10,14 @@ INSERT INTO department (created_at, updated_at, name)
 SELECT now(), now(), 'Migration'
 WHERE NOT EXISTS (SELECT 1 FROM department);
 
--- ---------- Teams (single team: Migration) ----------
+-- ---------- Teams (PIP, Migration, Test Users) ----------
+-- Seeded per-name so new teams are added even on an already-initialised DB.
 INSERT INTO team (created_at, updated_at, name, department_id)
-SELECT now(), now(), 'Migration', d.id
+SELECT now(), now(), v.name, d.id
 FROM department d
+CROSS JOIN (VALUES ('PIP'), ('Migration'), ('Test Users')) AS v(name)
 WHERE d.name = 'Migration'
-  AND NOT EXISTS (SELECT 1 FROM team);
+  AND NOT EXISTS (SELECT 1 FROM team t WHERE t.name = v.name);
 
 -- ---------- Managers ----------
 INSERT INTO users (created_at, updated_at, employee_id, name, email, role, department_id, team_id, manager_id)
@@ -31,9 +33,61 @@ JOIN team t ON t.name = 'Migration'
 WHERE NOT EXISTS (SELECT 1 FROM users WHERE role = 'MANAGER');
 
 -- ---------- Employees ----------
--- No seeded/demo employees. Real employees are provisioned automatically on their
--- first Microsoft sign-in (see AuthService) and appear in the manager portal, which
--- lists every EMPLOYEE-role user. This keeps the portal showing only real logins.
+-- Real employees are provisioned automatically on their first Microsoft sign-in
+-- (see AuthService) and appear in the manager portal. Login matches on email
+-- (case-insensitive) and KEEPS any seeded team/role, so we can pre-declare team
+-- membership here and it survives first login.
+
+-- PIP team members. Created if absent (so they show before first login) and placed
+-- in the PIP team. Guarded case-insensitively so it never duplicates a real login.
+INSERT INTO users (created_at, updated_at, employee_id, name, email, role, department_id, team_id, manager_id)
+SELECT now(), now(), v.emp, v.name, v.email, 'EMPLOYEE', t.department_id, t.id, m.id
+FROM (VALUES
+    ('CF-PIP-01', 'Siva Kota',             'Siva.Kota@cloudfuze.com'),
+    ('CF-PIP-02', 'Ramana Reddy',          'Ramana.Reddy@cloudfuze.com'),
+    ('CF-PIP-03', 'Ganesh Kondameedi',     'Ganesh.Kondameedi@cloudfuze.com'),
+    ('CF-PIP-04', 'Pallavi Kosuvaripalli', 'Pallavi.Kosuvaripalli@cloudfuze.com'),
+    ('CF-PIP-05', 'Saikumar Kustapuram',   'Saikumar.Kustapuram@cloudfuze.com'),
+    ('CF-PIP-06', 'Vineetha Yenti',        'Vineetha.Yenti@cloudfuze.com'),
+    ('CF-PIP-07', 'Dathu Kaluvala',        'Dathu.Kaluvala@cloudfuze.com'),
+    ('CF-PIP-08', 'Ravi Hemanth',          'Ravi.Hemanth@cloudfuze.com')
+    ) AS v(emp, name, email)
+JOIN team t ON t.name = 'PIP'
+LEFT JOIN users m ON lower(m.email) = 'abhishek.sakala@cloudfuze.com' AND m.role = 'MANAGER'
+WHERE NOT EXISTS (SELECT 1 FROM users u WHERE lower(u.email) = lower(v.email));
+
+-- Ensure any of the PIP members who already exist (from a prior login) are in PIP.
+UPDATE users SET team_id = (SELECT id FROM team WHERE name = 'PIP'), updated_at = now()
+WHERE lower(email) IN (
+    'siva.kota@cloudfuze.com', 'ramana.reddy@cloudfuze.com', 'ganesh.kondameedi@cloudfuze.com',
+    'pallavi.kosuvaripalli@cloudfuze.com', 'saikumar.kustapuram@cloudfuze.com', 'vineetha.yenti@cloudfuze.com',
+    'dathu.kaluvala@cloudfuze.com', 'ravi.hemanth@cloudfuze.com')
+  AND team_id IS DISTINCT FROM (SELECT id FROM team WHERE name = 'PIP');
+
+-- Test Users team members. Same pattern as PIP: create if absent, else move into Test Users.
+INSERT INTO users (created_at, updated_at, employee_id, name, email, role, department_id, team_id, manager_id)
+SELECT now(), now(), v.emp, v.name, v.email, 'EMPLOYEE', t.department_id, t.id, m.id
+FROM (VALUES
+    ('CF-TEST-01', 'Kiran Ummenthala', 'Kiran.Ummenthala@cloudfuze.com'),
+    ('CF-TEST-02', 'Tharun Pothi',     'Tharun.Pothi@cloudfuze.com'),
+    ('CF-TEST-03', 'Lavanya Gopasana', 'Lavanya.gopasana@cloudfuze.com'),
+    ('CF-TEST-04', 'Anush Dasari',     'Anush.Dasari@cloudfuze.com')
+    ) AS v(emp, name, email)
+JOIN team t ON t.name = 'Test Users'
+LEFT JOIN users m ON lower(m.email) = 'abhishek.sakala@cloudfuze.com' AND m.role = 'MANAGER'
+WHERE NOT EXISTS (SELECT 1 FROM users u WHERE lower(u.email) = lower(v.email));
+
+UPDATE users SET team_id = (SELECT id FROM team WHERE name = 'Test Users'), updated_at = now()
+WHERE lower(email) IN (
+    'kiran.ummenthala@cloudfuze.com', 'tharun.pothi@cloudfuze.com',
+    'lavanya.gopasana@cloudfuze.com', 'anush.dasari@cloudfuze.com')
+  AND team_id IS DISTINCT FROM (SELECT id FROM team WHERE name = 'Test Users');
+
+-- Default team: any existing employee not explicitly placed in PIP/Test Users falls back
+-- to Migration (matches the "everyone else is Migration" rule; new sign-ins get this in
+-- AuthService). Only touches rows with no team, so PIP/Test assignments are preserved.
+UPDATE users SET team_id = (SELECT id FROM team WHERE name = 'Migration'), updated_at = now()
+WHERE role = 'EMPLOYEE' AND team_id IS NULL;
 
 -- ---------- Listening stories (each ~2 minutes of audio) ----------
 INSERT INTO listening_story (created_at, updated_at, title, script)

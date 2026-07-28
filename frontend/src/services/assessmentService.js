@@ -29,6 +29,7 @@ export const recordViolation = (sessionId, reason) =>
 
 // --- Manager ---
 export const getTeam = (params) => api.get('/manager/team', { params }).then((r) => r.data);
+export const getTeams = () => api.get('/manager/teams').then((r) => r.data);
 export const getEmployeeDetail = (id) => api.get(`/manager/employee/${id}`).then((r) => r.data);
 export const getEmployeeAttempts = (id) => api.get(`/manager/employee/${id}/attempts`).then((r) => r.data);
 export const downloadPdf = (id) =>

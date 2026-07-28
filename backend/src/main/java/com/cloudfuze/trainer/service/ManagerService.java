@@ -8,6 +8,7 @@ import com.cloudfuze.trainer.entity.User;
 import com.cloudfuze.trainer.exception.ApiException;
 import com.cloudfuze.trainer.exception.ResourceNotFoundException;
 import com.cloudfuze.trainer.repository.ProctorEventRepository;
+import com.cloudfuze.trainer.repository.TeamRepository;
 import com.cloudfuze.trainer.repository.UserRepository;
 import com.cloudfuze.trainer.service.ai.AiService;
 import com.cloudfuze.trainer.service.ai.OverallFeedback;
@@ -37,13 +38,26 @@ public class ManagerService {
     private final ProctorEventRepository proctorEventRepository;
     private final DashboardService dashboardService;
     private final AiService aiService;
+    private final TeamRepository teamRepository;
 
     public ManagerService(UserRepository userRepository, ProctorEventRepository proctorEventRepository,
-                          DashboardService dashboardService, AiService aiService) {
+                          DashboardService dashboardService, AiService aiService,
+                          TeamRepository teamRepository) {
         this.userRepository = userRepository;
         this.proctorEventRepository = proctorEventRepository;
         this.dashboardService = dashboardService;
         this.aiService = aiService;
+        this.teamRepository = teamRepository;
+    }
+
+    /** Distinct team names for the Team Overview filter dropdown, alphabetically sorted. */
+    public List<String> teamNames() {
+        return teamRepository.findAll().stream()
+                .map(com.cloudfuze.trainer.entity.Team::getName)
+                .filter(StringUtils::hasText)
+                .distinct()
+                .sorted(String.CASE_INSENSITIVE_ORDER)
+                .toList();
     }
 
     public List<ManagerDtos.TeamRow> team(User manager, String search, String team, String department) {

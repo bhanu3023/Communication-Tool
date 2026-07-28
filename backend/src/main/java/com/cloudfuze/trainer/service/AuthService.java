@@ -5,6 +5,7 @@ import com.cloudfuze.trainer.dto.ProfileDto;
 import com.cloudfuze.trainer.dto.auth.AuthDtos;
 import com.cloudfuze.trainer.entity.User;
 import com.cloudfuze.trainer.mapper.ProfileMapper;
+import com.cloudfuze.trainer.repository.TeamRepository;
 import com.cloudfuze.trainer.repository.UserRepository;
 import com.cloudfuze.trainer.security.AzureTokenVerifier;
 import com.cloudfuze.trainer.security.JwtService;
@@ -25,14 +26,17 @@ public class AuthService {
     private final UserRepository userRepository;
     private final ProfileMapper profileMapper;
     private final AuditService auditService;
+    private final TeamRepository teamRepository;
 
     public AuthService(AzureTokenVerifier azureTokenVerifier, JwtService jwtService,
-                       UserRepository userRepository, ProfileMapper profileMapper, AuditService auditService) {
+                       UserRepository userRepository, ProfileMapper profileMapper, AuditService auditService,
+                       TeamRepository teamRepository) {
         this.azureTokenVerifier = azureTokenVerifier;
         this.jwtService = jwtService;
         this.userRepository = userRepository;
         this.profileMapper = profileMapper;
         this.auditService = auditService;
+        this.teamRepository = teamRepository;
     }
 
     @Transactional
@@ -47,9 +51,16 @@ public class AuthService {
         User user = resolveUser(oid, email);
         // Provision on first login; keep seeded org data (department/team/role/manager) intact.
         if (user == null) {
-            user = new User();
-            user.setRole(Role.EMPLOYEE);
-            user.setEmployeeId("CF-" + Math.abs((oid == null ? email : oid).hashCode() % 100000));
+            User u = new User();
+            u.setRole(Role.EMPLOYEE);
+            u.setEmployeeId("CF-" + Math.abs((oid == null ? email : oid).hashCode() % 100000));
+            // New sign-ins default to the Migration team. PIP/Test members are pre-seeded
+            // (data.sql) and take the resolveUser branch above, so they keep their team.
+            teamRepository.findByName("Migration").ifPresent(t -> {
+                u.setTeam(t);
+                u.setDepartment(t.getDepartment());
+            });
+            user = u;
         }
         user.setAzureOid(oid);
         user.setEmail(email);
