@@ -46,7 +46,7 @@ public class ManagerController {
 
     public ManagerController(ManagerService managerService, AttemptDetailService attemptDetailService,
                              PdfService pdfService, AttemptService attemptService, CurrentUser currentUser,
-                             @Value("${app.super-admin-emails:abhinav.surattu@cloudfuze.com,bhanu.srikakulam@cloudfuze.com}")
+                             @Value("${app.super-admin-emails:abhinav.surattu@cloudfuze.com,bhanu.srikakulam@cloudfuze.com,manmadha.jayamangala@cloudfuze.com}")
                              String superAdminEmails) {
         this.managerService = managerService;
         this.attemptDetailService = attemptDetailService;

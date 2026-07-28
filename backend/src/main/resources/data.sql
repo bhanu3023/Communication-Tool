@@ -32,6 +32,19 @@ JOIN department d ON d.name = 'Migration'
 JOIN team t ON t.name = 'Migration'
 WHERE NOT EXISTS (SELECT 1 FROM users WHERE role = 'MANAGER');
 
+-- Manmadha is an admin (super-admin list is in ManagerController) and must be a MANAGER
+-- to reach /api/manager/**. Per-email idempotent so it applies on an already-seeded DB:
+-- create if absent, else promote an existing account to MANAGER.
+INSERT INTO users (created_at, updated_at, employee_id, name, email, role, department_id, team_id, manager_id)
+SELECT now(), now(), 'CF-1012', 'Manmadha Jayamangala', 'Manmadha.jayamangala@cloudfuze.com', 'MANAGER', d.id, t.id, NULL
+FROM department d
+JOIN team t ON t.name = 'Migration'
+WHERE d.name = 'Migration'
+  AND NOT EXISTS (SELECT 1 FROM users u WHERE lower(u.email) = 'manmadha.jayamangala@cloudfuze.com');
+
+UPDATE users SET role = 'MANAGER', manager_id = NULL, updated_at = now()
+WHERE lower(email) = 'manmadha.jayamangala@cloudfuze.com' AND role <> 'MANAGER';
+
 -- ---------- Employees ----------
 -- Real employees are provisioned automatically on their first Microsoft sign-in
 -- (see AuthService) and appear in the manager portal. Login matches on email
