@@ -451,7 +451,7 @@ export default function Speaking() {
 
   if (phase === 'result' && result) {
     const items = result.details?.items || [];
-    const scoreColor = (v) => (v >= 80 ? 'success' : v >= 60 ? 'warning' : 'error');
+    const scoreColor = (v) => (v >= 75 ? 'success' : 'error'); // pass mark 75: green/red only
     const DIMENSIONS = [
       ['Pronunciation', 'pronunciation'],
       ['Fluency', 'fluency'],

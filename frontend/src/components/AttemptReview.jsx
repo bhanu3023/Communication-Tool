@@ -117,7 +117,7 @@ const SPEAKING_DIMS = [
 
 /** A compact, colored stat tile for one speaking sub-score. */
 function SubScore({ label, value }) {
-  const c = scoreColor(value); // 'success' | 'warning' | 'error'
+  const c = scoreColor(value); // 'success' (>= 75) | 'error' (< 75)
   return (
     <Box
       sx={{

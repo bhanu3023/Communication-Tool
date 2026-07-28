@@ -1,10 +1,10 @@
 import { Box, CircularProgress, Typography } from '@mui/material';
-import { fmtScore } from '../utils/format';
+import { fmtScore, PASS_MARK } from '../utils/format';
 
-/** Circular 0-100 score gauge with color banding. */
+/** Circular 0-100 score gauge — green at/above the pass mark, red below. */
 export default function ScoreGauge({ score, size = 120, label }) {
   const value = score == null ? 0 : Math.max(0, Math.min(100, score));
-  const color = score == null ? 'inherit' : value >= 80 ? 'success' : value >= 65 ? 'primary' : 'warning';
+  const color = score == null ? 'inherit' : value >= PASS_MARK ? 'success' : 'error';
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
