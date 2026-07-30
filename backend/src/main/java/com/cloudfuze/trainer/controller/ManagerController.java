@@ -17,6 +17,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -120,6 +121,22 @@ public class ManagerController {
         requireSuperAdmin();
         managerService.grantManager(request.email());
         return managerService.managers();
+    }
+
+    @Operation(summary = "Revoke a user's manager access (admin only)")
+    @DeleteMapping("/access/managers/{id}")
+    public List<ManagerDtos.ManagerRow> revokeManager(@PathVariable Long id) {
+        requireSuperAdmin();
+        ManagerDtos.ManagerRow target = managerService.managers().stream()
+                .filter(m -> m.id().equals(id))
+                .findFirst()
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Manager not found"));
+        // An administrator's access can never be revoked (this also blocks self-revoke,
+        // since only super-admins reach this endpoint).
+        if (superAdminEmails.contains(target.email().toLowerCase(Locale.ROOT))) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "An administrator's access cannot be revoked");
+        }
+        return managerService.revokeManager(id);
     }
 
     @Operation(summary = "Download a PDF report for one team member")

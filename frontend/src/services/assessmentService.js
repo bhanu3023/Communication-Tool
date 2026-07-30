@@ -41,3 +41,5 @@ export const grantAttempt = (id, section) =>
 export const getManagers = () => api.get('/manager/access/managers').then((r) => r.data);
 export const grantManagerAccess = (email) =>
   api.post('/manager/access/grant', { email }).then((r) => r.data);
+export const revokeManagerAccess = (id) =>
+  api.delete(`/manager/access/managers/${id}`).then((r) => r.data);

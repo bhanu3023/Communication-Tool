@@ -75,6 +75,23 @@ public class ManagerService {
     }
 
     /**
+     * Revoke a user's manager access by demoting them back to EMPLOYEE. The caller
+     * (controller) must have verified super-admin rights and that the target is not
+     * itself a super-admin. Returns the updated manager list.
+     */
+    @Transactional
+    public List<ManagerDtos.ManagerRow> revokeManager(Long id) {
+        User u = userRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Manager not found: " + id));
+        if (u.getRole() != Role.MANAGER) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "User is not a manager");
+        }
+        u.setRole(Role.EMPLOYEE);
+        userRepository.save(u);
+        return managers();
+    }
+
+    /**
      * Grant manager access to the user with the given email. If the user already
      * exists they are promoted to MANAGER; otherwise a manager account is created so
      * the role is in place before their first Microsoft login.

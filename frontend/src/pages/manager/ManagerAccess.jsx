@@ -7,22 +7,34 @@ import {
   CardContent,
   Chip,
   CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogContentText,
+  DialogTitle,
   Divider,
+  IconButton,
   InputAdornment,
   Paper,
   Stack,
   TextField,
+  Tooltip,
   Typography,
 } from '@mui/material';
 import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettingsOutlined';
 import EmailIcon from '@mui/icons-material/EmailOutlined';
 import PersonAddIcon from '@mui/icons-material/PersonAddAlt1';
+import DeleteIcon from '@mui/icons-material/DeleteOutline';
 import LoadingScreen from '../../components/LoadingScreen';
-import { getManagers, grantManagerAccess } from '../../services/assessmentService';
+import { getManagers, grantManagerAccess, revokeManagerAccess } from '../../services/assessmentService';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
 
-const SUPER_ADMIN_EMAILS = ['abhinav.surattu@cloudfuze.com', 'bhanu.srikakulam@cloudfuze.com'];
+const SUPER_ADMIN_EMAILS = [
+  'abhinav.surattu@cloudfuze.com',
+  'bhanu.srikakulam@cloudfuze.com',
+  'manmadha.jayamangala@cloudfuze.com',
+];
 const isSuperAdmin = (email) => SUPER_ADMIN_EMAILS.includes((email || '').toLowerCase());
 
 const initialsOf = (name) =>
@@ -37,6 +49,8 @@ export default function ManagerAccess() {
   const [loading, setLoading] = useState(true);
   const [email, setEmail] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [toRevoke, setToRevoke] = useState(null); // manager pending revoke confirmation
+  const [revoking, setRevoking] = useState(false);
 
   const isAdmin = isSuperAdmin(profile?.email);
 
@@ -82,6 +96,21 @@ export default function ManagerAccess() {
       showToast(e?.response?.data?.message || 'Could not grant manager access.', 'error');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleRevoke = async () => {
+    if (!toRevoke) return;
+    setRevoking(true);
+    try {
+      const updated = await revokeManagerAccess(toRevoke.id);
+      setManagers(updated);
+      showToast(`Manager access removed for ${toRevoke.name}.`, 'success');
+      setToRevoke(null);
+    } catch (e) {
+      showToast(e?.response?.data?.message || 'Could not remove manager access.', 'error');
+    } finally {
+      setRevoking(false);
     }
   };
 
@@ -165,7 +194,19 @@ export default function ManagerAccess() {
                   {isSuperAdmin(m.email) ? (
                     <Chip size="small" color="primary" label="Admin" />
                   ) : (
-                    <Chip size="small" variant="outlined" label="Manager" />
+                    <>
+                      <Chip size="small" variant="outlined" label="Manager" />
+                      <Tooltip title="Remove manager access">
+                        <IconButton
+                          size="small"
+                          color="error"
+                          onClick={() => setToRevoke(m)}
+                          aria-label={`Remove manager access for ${m.name}`}
+                        >
+                          <DeleteIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    </>
                   )}
                 </Stack>
               </Box>
@@ -173,6 +214,36 @@ export default function ManagerAccess() {
           )}
         </Card>
       )}
+
+      {/* Revoke confirmation */}
+      <Dialog open={!!toRevoke} onClose={() => !revoking && setToRevoke(null)}>
+        <DialogTitle>Remove manager access?</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            {toRevoke && (
+              <>
+                <strong>{toRevoke.name}</strong> ({toRevoke.email}) will lose manager access and
+                become a regular employee. Their assessment data is kept. You can grant access
+                again anytime.
+              </>
+            )}
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button onClick={() => setToRevoke(null)} disabled={revoking}>
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            color="error"
+            onClick={handleRevoke}
+            disabled={revoking}
+            startIcon={revoking ? <CircularProgress size={16} color="inherit" /> : <DeleteIcon />}
+          >
+            Remove access
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }
