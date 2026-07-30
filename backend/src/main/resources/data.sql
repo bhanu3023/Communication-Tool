@@ -84,7 +84,8 @@ FROM (VALUES
     ('CF-TEST-01', 'Kiran Ummenthala', 'Kiran.Ummenthala@cloudfuze.com'),
     ('CF-TEST-02', 'Tharun Pothi',     'Tharun.Pothi@cloudfuze.com'),
     ('CF-TEST-03', 'Lavanya Gopasana', 'Lavanya.gopasana@cloudfuze.com'),
-    ('CF-TEST-04', 'Anush Dasari',     'Anush.Dasari@cloudfuze.com')
+    ('CF-TEST-04', 'Anush Dasari',     'Anush.Dasari@cloudfuze.com'),
+    ('CF-TEST-05', 'Joy Prakash',      'Joy.Prakash@cloudfuze.com')
     ) AS v(emp, name, email)
 JOIN team t ON t.name = 'Test Users'
 LEFT JOIN users m ON lower(m.email) = 'abhishek.sakala@cloudfuze.com' AND m.role = 'MANAGER'
@@ -93,7 +94,7 @@ WHERE NOT EXISTS (SELECT 1 FROM users u WHERE lower(u.email) = lower(v.email));
 UPDATE users SET team_id = (SELECT id FROM team WHERE name = 'Test Users'), updated_at = now()
 WHERE lower(email) IN (
     'kiran.ummenthala@cloudfuze.com', 'tharun.pothi@cloudfuze.com',
-    'lavanya.gopasana@cloudfuze.com', 'anush.dasari@cloudfuze.com')
+    'lavanya.gopasana@cloudfuze.com', 'anush.dasari@cloudfuze.com', 'joy.prakash@cloudfuze.com')
   AND team_id IS DISTINCT FROM (SELECT id FROM team WHERE name = 'Test Users');
 
 -- Default team: any existing employee not explicitly placed in PIP/Test Users falls back
