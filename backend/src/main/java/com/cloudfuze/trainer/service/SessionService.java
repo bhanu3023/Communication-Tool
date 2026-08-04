@@ -32,24 +32,32 @@ public class SessionService {
     }
 
     /**
-     * Returns the active (in-progress) attempt for the given section, creating a
-     * new one if none is open — enforcing that section's attempt limit.
+     * Returns the active (in-progress) attempt for the given section at the given
+     * level, creating a new one if none is open — enforcing both the level gate and
+     * that section's attempt limit for that level.
      */
     @Transactional
-    public AssessmentSession getOrCreateActiveSection(User user, Section section) {
+    public AssessmentSession getOrCreateActiveSection(User user, Section section, int level) {
+        AttemptPolicy.requireValidLevel(level);
+        // The gate is checked server-side too: hiding the button is not access control.
+        if (!attemptPolicy.levelUnlocked(user.getId(), level)) {
+            throw new ApiException(HttpStatus.FORBIDDEN, attemptPolicy.lockedMessage(level));
+        }
         return sessionRepository
-                .findFirstByUserIdAndSectionAndStatusOrderByCreatedAtDesc(
-                        user.getId(), section, SessionStatus.IN_PROGRESS)
+                .findFirstByUserIdAndSectionAndLevelAndStatusOrderByCreatedAtDesc(
+                        user.getId(), section, level, SessionStatus.IN_PROGRESS)
                 .orElseGet(() -> {
-                    if (!attemptPolicy.canStartNewAttempt(user.getId(), section)) {
-                        throw new ApiException(HttpStatus.FORBIDDEN, attemptPolicy.blockedMessage(section));
+                    if (!attemptPolicy.canStartNewAttempt(user.getId(), section, level)) {
+                        throw new ApiException(HttpStatus.FORBIDDEN, attemptPolicy.blockedMessage(section, level));
                     }
                     AssessmentSession s = new AssessmentSession();
                     s.setUser(user);
                     s.setSection(section);
+                    s.setLevel(level);
                     s.setStatus(SessionStatus.IN_PROGRESS);
                     s.setStartedAt(Instant.now());
-                    s.setAttemptNumber((int) sessionRepository.countByUserIdAndSection(user.getId(), section) + 1);
+                    s.setAttemptNumber(
+                            (int) sessionRepository.countByUserIdAndSectionAndLevel(user.getId(), section, level) + 1);
                     return sessionRepository.save(s);
                 });
     }

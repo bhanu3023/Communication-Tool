@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.concurrent.TimeUnit;
@@ -32,10 +33,10 @@ public class SpeakingController {
         this.currentUser = currentUser;
     }
 
-    @Operation(summary = "Start the speaking section and receive 10 sentences")
+    @Operation(summary = "Start the speaking section for a level and receive 10 sentences")
     @PostMapping("/start")
-    public SpeakingDtos.StartResponse start() {
-        return speakingService.start(currentUser.user());
+    public SpeakingDtos.StartResponse start(@RequestParam(defaultValue = "1") int level) {
+        return speakingService.start(currentUser.user(), level);
     }
 
     @Operation(summary = "Submit speech transcripts and receive the score")

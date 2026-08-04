@@ -7,6 +7,7 @@ package com.cloudfuze.trainer.dto;
 public record AttemptDetail(
         Long sessionId,
         String section,
+        int level,
         int attemptNumber,
         String date,
         Double score,

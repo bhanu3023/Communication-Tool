@@ -17,10 +17,10 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Serves the 10 sentences for a Speaking attempt. Each attempt gets a DIFFERENT
- * set: a set the user has not been served before, chosen least-recently-used so
- * the 50 sets are spread evenly across users. The chosen set is pinned to the
- * attempt (session) so reloading the same attempt shows the same sentences.
+ * Serves the 10 sentences for a Speaking attempt, from the bank of the level being
+ * attempted. Each attempt gets a set the user has not been served before at that level,
+ * chosen least-recently-used so sets spread evenly across users. The chosen set is
+ * pinned to the attempt (session) so reloading shows the same sentences.
  */
 @Service
 public class SpeakingSetService {
@@ -34,36 +34,39 @@ public class SpeakingSetService {
         this.sessionRepository = sessionRepository;
     }
 
-    /** Returns the 10 sentences for this Speaking attempt, assigning a set on first use. */
+    /** Returns the sentences for this Speaking attempt, assigning a set on first use. */
     @Transactional
     public List<SpeakingSentence> sentencesForSession(User user, AssessmentSession session) {
+        int level = session.getLevel();
         if (session.getSpeakingSetNumber() == null) {
-            session.setSpeakingSetNumber(pickSet(user));
+            session.setSpeakingSetNumber(pickSet(user, level));
             sessionRepository.save(session);
         }
         List<SpeakingSentence> sentences =
-                speakingRepo.findBySetNumberOrderByIdAsc(session.getSpeakingSetNumber());
+                speakingRepo.findByLevelAndSetNumberOrderByIdAsc(level, session.getSpeakingSetNumber());
         if (sentences.isEmpty()) {
-            throw new ResourceNotFoundException("No sentences for speaking set " + session.getSpeakingSetNumber());
+            throw new ResourceNotFoundException(
+                    "No sentences for level " + level + " speaking set " + session.getSpeakingSetNumber());
         }
         return sentences;
     }
 
     /**
-     * Picks a set the user has NOT used yet (so a retake never repeats their own
-     * questions), preferring the least-recently-used set overall. Falls back to
-     * global LRU if the user has somehow used every set.
+     * Picks a set the user has NOT used yet at this level (so a retake never repeats
+     * their own questions), preferring the least-recently-used set overall. Falls back
+     * to global LRU if the user has already used every set at this level.
      */
-    private int pickSet(User user) {
-        List<Integer> allSets = speakingRepo.findDistinctSetNumbers();
+    private int pickSet(User user, int level) {
+        List<Integer> allSets = speakingRepo.findDistinctSetNumbersByLevel(level);
         if (allSets.isEmpty()) {
-            throw new ResourceNotFoundException("No speaking sets are configured");
+            throw new ResourceNotFoundException("No speaking sets are configured for level " + level);
         }
 
-        Set<Integer> usedByUser = new HashSet<>(sessionRepository.findSpeakingSetsUsedByUser(user.getId()));
+        Set<Integer> usedByUser =
+                new HashSet<>(sessionRepository.findSpeakingSetsUsedByUserAndLevel(user.getId(), level));
 
         Map<Integer, Instant> lastUsed = new HashMap<>();
-        for (Object[] row : sessionRepository.findSpeakingSetUsage()) {
+        for (Object[] row : sessionRepository.findSpeakingSetUsageByLevel(level)) {
             if (row[0] != null) {
                 lastUsed.put((Integer) row[0], (Instant) row[1]);
             }

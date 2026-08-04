@@ -31,40 +31,44 @@ public class AttemptService {
         this.auditService = auditService;
     }
 
-    private SectionAttemptControl control(User user, Section section) {
-        return controlRepository.findByUserIdAndSection(user.getId(), section)
+    private SectionAttemptControl control(User user, Section section, int level) {
+        return controlRepository.findByUserIdAndSectionAndLevel(user.getId(), section, level)
                 .orElseGet(() -> {
                     SectionAttemptControl c = new SectionAttemptControl();
                     c.setUser(user);
                     c.setSection(section);
+                    c.setLevel(level);
                     return c;
                 });
     }
 
-    /** Employee requests another attempt for a section whose attempts are exhausted. */
+    /** Employee requests another attempt for a section (at one level) whose attempts are exhausted. */
     @Transactional
-    public DashboardDtos.SectionCard requestAnother(User user, Section section) {
-        if (!attemptPolicy.exhausted(user.getId(), section)) {
-            throw new ApiException(HttpStatus.CONFLICT,
-                    "You still have attempts remaining for the " + AttemptPolicy.label(section) + " section.");
+    public DashboardDtos.SectionCard requestAnother(User user, Section section, int level) {
+        AttemptPolicy.requireValidLevel(level);
+        if (!attemptPolicy.exhausted(user.getId(), section, level)) {
+            throw new ApiException(HttpStatus.CONFLICT, "You still have Level " + level
+                    + " attempts remaining for the " + AttemptPolicy.label(section) + " section.");
         }
-        SectionAttemptControl c = control(user, section);
+        SectionAttemptControl c = control(user, section, level);
         c.setRequestPending(true);
         controlRepository.save(c);
-        auditService.log(user.getEmail(), "ATTEMPT_REQUEST", "section=" + section + " requested another attempt");
-        return dashboardService.sectionCard(user, section);
+        auditService.log(user.getEmail(), "ATTEMPT_REQUEST",
+                "section=" + section + " level=" + level + " requested another attempt");
+        return dashboardService.sectionCard(user, section, level);
     }
 
     /** Manager grants extra attempts to an employee for a section (clears any pending request). */
     @Transactional
-    public void grant(User manager, Long employeeId, Section section, int extra) {
+    public void grant(User manager, Long employeeId, Section section, int level, int extra) {
+        AttemptPolicy.requireValidLevel(level);
         User employee = userRepository.findById(employeeId)
                 .orElseThrow(() -> new ResourceNotFoundException("Employee not found: " + employeeId));
-        SectionAttemptControl c = control(employee, section);
+        SectionAttemptControl c = control(employee, section, level);
         c.setExtraGranted(c.getExtraGranted() + Math.max(1, extra));
         c.setRequestPending(false);
         controlRepository.save(c);
-        auditService.log(manager.getEmail(), "ATTEMPT_GRANT",
-                "employee=" + employeeId + " section=" + section + " granted=" + Math.max(1, extra));
+        auditService.log(manager.getEmail(), "ATTEMPT_GRANT", "employee=" + employeeId + " section=" + section
+                + " level=" + level + " granted=" + Math.max(1, extra));
     }
 }

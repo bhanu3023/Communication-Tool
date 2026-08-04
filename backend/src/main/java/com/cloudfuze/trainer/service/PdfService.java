@@ -56,13 +56,13 @@ public class PdfService {
                   .kv { margin: 2px 0; }
                 </style></head>
                 <body>
-                  <h1>Communication Skills Report</h1>
+                  <h1>Communication Skills Report — Level %s</h1>
                   <div class="brand">CloudFuze — AI Communication Skills Trainer</div>
                   <div class="kv"><strong>Employee:</strong> %s (%s)</div>
                   <div class="kv"><strong>Team:</strong> %s</div>
                   <div class="kv"><strong>Manager:</strong> %s</div>
 
-                  <h2>Per-Section Summary</h2>
+                  <h2>Per-Section Summary — Level %s (pass mark %s)</h2>
                   <table>
                     <tr><th>Section</th><th>Attempts</th><th>Latest</th><th>Best</th><th>Change vs previous</th></tr>
                     %s
@@ -72,8 +72,10 @@ public class PdfService {
                   %s
                 </body></html>
                 """.formatted(
+                d.level(),
                 esc(d.name()), esc(d.email()),
                 esc(d.team()), esc(d.manager()),
+                d.level(), fmt(AttemptPolicy.passMark(d.level())),
                 rows, list(d.recommendations()));
     }
 

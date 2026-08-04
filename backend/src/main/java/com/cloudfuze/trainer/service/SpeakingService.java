@@ -126,8 +126,8 @@ public class SpeakingService {
     }
 
     @Transactional
-    public SpeakingDtos.StartResponse start(User user) {
-        AssessmentSession session = sessionService.getOrCreateActiveSection(user, Section.SPEAKING);
+    public SpeakingDtos.StartResponse start(User user, int level) {
+        AssessmentSession session = sessionService.getOrCreateActiveSection(user, Section.SPEAKING, level);
         // Each attempt gets a different set of 10 sentences (never the user's own repeats).
         List<SpeakingSentence> sentences = speakingSetService.sentencesForSession(user, session);
         List<SpeakingDtos.SentenceView> views = new ArrayList<>();

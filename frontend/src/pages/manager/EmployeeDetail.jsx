@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   Accordion,
   AccordionDetails,
   AccordionSummary,
+  Alert,
   Avatar,
   Box,
   Button,
@@ -35,6 +36,8 @@ import EditNoteIcon from '@mui/icons-material/EditNote';
 import LoadingScreen from '../../components/LoadingScreen';
 import AttemptReview from '../../components/AttemptReview';
 import { downloadPdf, getEmployeeAttempts, getEmployeeDetail, grantAttempt } from '../../services/assessmentService';
+import LevelTabs from '../../components/LevelTabs';
+import { levelTheme, rulesSummary } from '../../utils/levels';
 import { useToast } from '../../contexts/ToastContext';
 import { scoreColor } from '../../utils/format';
 
@@ -161,20 +164,25 @@ export default function EmployeeDetail() {
   const [attempts, setAttempts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [downloading, setDownloading] = useState(false);
+  // Arrives from the team table so the manager stays on the level they were reviewing.
+  const [searchParams] = useSearchParams();
+  const [level, setLevel] = useState(Number(searchParams.get('level')) === 2 ? 2 : 1);
 
+  // Sections, warnings and feedback are all per level, so a level change refetches.
   useEffect(() => {
-    getEmployeeDetail(id)
+    setLoading(true);
+    getEmployeeDetail(id, level)
       .then(setDetail)
       .catch((e) => showToast(e?.response?.data?.message || 'Failed to load employee', 'error'))
       .finally(() => setLoading(false));
-    getEmployeeAttempts(id).then(setAttempts).catch(() => setAttempts([]));
-  }, [id, showToast]);
+    getEmployeeAttempts(id, level).then(setAttempts).catch(() => setAttempts([]));
+  }, [id, level, showToast]);
 
   const handleGrant = async (section) => {
     try {
-      const updated = await grantAttempt(id, section);
+      const updated = await grantAttempt(id, section, level);
       setDetail(updated);
-      showToast(`Granted another ${section.toLowerCase()} attempt.`, 'success');
+      showToast(`Granted another Level ${level} ${section.toLowerCase()} attempt.`, 'success');
     } catch {
       showToast('Could not grant attempt', 'error');
     }
@@ -183,11 +191,11 @@ export default function EmployeeDetail() {
   const handleDownload = async () => {
     setDownloading(true);
     try {
-      const blob = await downloadPdf(id);
+      const blob = await downloadPdf(id, level);
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `report-${detail.employeeCode}.pdf`;
+      a.download = `report-${detail.employeeCode}-level${level}.pdf`;
       a.click();
       window.URL.revokeObjectURL(url);
     } catch {
@@ -210,7 +218,7 @@ export default function EmployeeDetail() {
           Back to team
         </Button>
         <Button variant="contained" startIcon={<DownloadIcon />} onClick={handleDownload} disabled={downloading}>
-          {downloading ? 'Preparing…' : 'Download PDF Report'}
+          {downloading ? 'Preparing…' : `Download Level ${level} Report`}
         </Button>
       </Stack>
 
@@ -229,11 +237,36 @@ export default function EmployeeDetail() {
             </Typography>
           </Box>
         </Stack>
+
+        {/* Everything below reports the selected level only */}
+        <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mt: 2.5 }} flexWrap="wrap" useFlexGap>
+          <LevelTabs value={level} onChange={setLevel} alwaysUnlocked />
+          <Chip size="small" variant="outlined" label={rulesSummary(level)} />
+          {detail.level2Unlocked ? (
+            <Chip
+              size="small"
+              label="Level 2 unlocked"
+              sx={{ bgcolor: `${levelTheme(2).accent}14`, color: levelTheme(2).accent, fontWeight: 700 }}
+            />
+          ) : (
+            <Chip size="small" variant="outlined" label="Level 2 not unlocked" />
+          )}
+        </Stack>
       </Paper>
+
+      {/* A Level 2 view for someone who never got there would otherwise look like a
+          string of empty sections; say why instead. */}
+      {level === 2 && !detail.level2Unlocked && (
+        <Alert severity="info" sx={{ mb: 3 }}>
+          <strong>{detail.name.split(' ')[0]} has not unlocked Level 2 yet.</strong> All three Level 1
+          sections must be passed first, so there is nothing to review here. You can still grant Level 2
+          attempts in advance — they apply the moment the portal opens.
+        </Alert>
+      )}
 
       {/* Sections & attempts */}
       <Typography variant="h6" sx={{ mb: 1.5 }}>
-        Sections &amp; Attempts
+        Sections &amp; Attempts — Level {level}
       </Typography>
       <Grid container spacing={2.5} sx={{ mb: 3 }}>
         {detail.sections.map((c) => (
@@ -245,7 +278,7 @@ export default function EmployeeDetail() {
 
       {/* AI feedback */}
       <Typography variant="h6" sx={{ mb: 1.5 }}>
-        AI Feedback &amp; Recommendations
+        AI Feedback &amp; Recommendations — Level {level}
       </Typography>
       <Grid container spacing={2.5} sx={{ mb: 3 }}>
         {FB_COLS.map((col) => (
@@ -294,13 +327,13 @@ export default function EmployeeDetail() {
 
       {/* Feedback by attempt */}
       <Typography variant="h6" sx={{ mb: 1.5 }}>
-        Feedback by Attempt
+        Feedback by Attempt — Level {level}
       </Typography>
       {attempts.length === 0 ? (
         <Card>
           <CardContent>
             <Typography variant="body2" color="text.secondary">
-              No completed attempts yet.
+              No completed Level {level} attempts yet.
             </Typography>
           </CardContent>
         </Card>

@@ -4,7 +4,10 @@ import com.fasterxml.jackson.databind.JsonNode;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Facade over AI evaluation. Uses OpenAI when configured, otherwise (or on any
@@ -14,8 +17,27 @@ import java.util.List;
 @Service
 public class AiService {
 
+    /** Most distinct score-triples we keep coaching text for before evicting the oldest. */
+    private static final int OVERALL_CACHE_MAX = 512;
+
     private final OpenAiClient openAi;
     private final MockAiEvaluator mock;
+
+    /**
+     * Coaching summaries keyed on the score triple they were generated from.
+     *
+     * The summary is a pure function of those three scores, and they only change when an
+     * attempt completes — so a hit is always correct and never stale (new scores simply
+     * produce a new key). Without this, every AI Coach page load spent a fresh 5-6s
+     * OpenAI round-trip re-deriving identical text. Access-ordered LRU, bounded.
+     */
+    private final Map<String, OverallFeedback> overallCache = Collections.synchronizedMap(
+            new LinkedHashMap<>(64, 0.75f, true) {
+                @Override
+                protected boolean removeEldestEntry(Map.Entry<String, OverallFeedback> eldest) {
+                    return size() > OVERALL_CACHE_MAX;
+                }
+            });
 
     public AiService(OpenAiClient openAi, MockAiEvaluator mock) {
         this.openAi = openAi;
@@ -114,7 +136,15 @@ public class AiService {
                         + "EVERYTHING the situation required (e.g. a specific ETA, the cause, next steps, an apology "
                         + "when warranted, the exact ask). HEAVILY penalize answers that omit key facts from the "
                         + "situation, use the wrong tone, are vague, or are too short; a one-line or empty answer "
-                        + "scores near 0. Do not default to round numbers. Return JSON with those numeric fields plus "
+                        + "scores near 0. HOUSE STYLE (this is a US-facing company, and it is marked): figures "
+                        + "must group digits in THREES with commas (e.g. $1,250,000). Treat Indian-style "
+                        + "grouping (12,50,000 / 1,23,456), the words lakh/lakhs/crore/crores, and any rupee "
+                        + "amount (Rs., INR, the rupee sign) as CONCRETE ERRORS: list each one in 'mistakes' with "
+                        + "the correct US form, and lower professionalism and clarity accordingly. CRITICAL: only "
+                        + "list a figure in 'mistakes' if it ACTUALLY breaks the rule — never emit a correction "
+                        + "identical to the original (e.g. never write \"1,250,000 should be 1,250,000\"). A figure "
+                        + "already grouped in threes and already in dollars is CORRECT: say nothing about it. Do not default "
+                        + "to round numbers. Return JSON with those numeric fields plus "
                         + "'mistakes' (array of specific errors), 'suggestions' (array of concrete, specific "
                         + "improvements), and 'improvedVersion' (a polished, ready-to-send MODEL answer that correctly "
                         + "handles this exact situation, so the candidate learns how to write it).",
@@ -132,7 +162,7 @@ public class AiService {
         overall = round(overall / vals.length);
         return new WritingEvaluation(round(vals[0]), round(vals[1]), round(vals[2]), round(vals[3]),
                 round(vals[4]), round(vals[5]), round(vals[6]), round(vals[7]), round(vals[8]), round(vals[9]),
-                overall, strings(node, "mistakes"), strings(node, "suggestions"),
+                overall, dropNoOpCorrections(strings(node, "mistakes")), strings(node, "suggestions"),
                 node.path("improvedVersion").asText(""));
     }
 
@@ -164,6 +194,16 @@ public class AiService {
      * mock evaluator on any error or when no key/quota is available.
      */
     public OverallFeedback buildOverall(Double listening, Double speaking, Double writing) {
+        // Nothing attempted yet — there is nothing to coach on, so don't spend a call.
+        // The mock's "how to get started" guidance is exactly right here and instant.
+        if (listening == null && speaking == null && writing == null) {
+            return mock.buildOverall(null, null, null);
+        }
+        String cacheKey = listening + "|" + speaking + "|" + writing;
+        OverallFeedback cached = overallCache.get(cacheKey);
+        if (cached != null) {
+            return cached;
+        }
         String status = "The employee's LATEST score per section (0-100, pass mark 75; "
                 + "\"NOT ATTEMPTED\" means they have not taken it yet):\n"
                 + "- Listening: " + fmtScore(listening) + "\n"
@@ -194,7 +234,12 @@ public class AiService {
         if (strengths.isEmpty() && weaknesses.isEmpty() && suggestions.isEmpty()) {
             return mock.buildOverall(listening, speaking, writing);
         }
-        return new OverallFeedback(strengths, weaknesses, suggestions);
+        OverallFeedback result = new OverallFeedback(strengths, weaknesses, suggestions);
+        // Only REAL results are cached. Caching a mock fallback would pin placeholder text
+        // to these scores permanently, so a transient outage or spent quota would keep
+        // serving mock coaching long after OpenAI recovered.
+        overallCache.put(cacheKey, result);
+        return result;
     }
 
     private String fmtScore(Double s) {
@@ -202,6 +247,31 @@ public class AiService {
     }
 
     // --- helpers ---
+
+    /**
+     * Drops "X should be X" style entries. Even when told not to, the model sometimes
+     * "corrects" a figure that was already right — telling a candidate that 1,250,000
+     * should be 1,250,000 destroys trust in the whole feedback panel, so the belt-and-
+     * braces filter lives here rather than only in the prompt.
+     */
+    private List<String> dropNoOpCorrections(List<String> mistakes) {
+        List<String> out = new ArrayList<>();
+        for (String m : mistakes) {
+            if (m == null || m.isBlank()) continue;
+            java.util.regex.Matcher x = NO_OP_CORRECTION.matcher(m);
+            if (x.find() && normalise(x.group(1)).equals(normalise(x.group(2)))) continue;
+            out.add(m);
+        }
+        return out;
+    }
+
+    private static final java.util.regex.Pattern NO_OP_CORRECTION = java.util.regex.Pattern.compile(
+            "(.+?)\\s+(?:should be|must be|->|→)\\s+(.+?)\\s*$", java.util.regex.Pattern.CASE_INSENSITIVE);
+
+    /** Compares corrections ignoring quotes, spacing and trailing punctuation. */
+    private String normalise(String s) {
+        return s.replaceAll("[\"'`.,;:]", "").replaceAll("\\s+", " ").trim().toLowerCase(java.util.Locale.ROOT);
+    }
 
     private double num(JsonNode node, String field) {
         return Math.max(0, Math.min(100, node.path(field).asDouble(0)));

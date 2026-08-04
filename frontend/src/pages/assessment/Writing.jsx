@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
+  Alert,
   Box,
   Button,
   Card,
@@ -36,6 +37,14 @@ function buildTemplate(prompt) {
 
 export default function Writing() {
   const navigate = useNavigate();
+  // Which level's test this is. Comes from the URL (?level=2) so the page itself
+  // stays level-agnostic — the content, attempt count and pass mark all come back
+  // from /start for that level.
+  const [searchParams] = useSearchParams();
+  const level = Number(searchParams.get('level')) === 2 ? 2 : 1;
+  // Every exit from a Level 2 test returns to the Level 2 portal, never to Level 1.
+  const homePath = level === 2 ? '/level-2' : '/dashboard';
+  const hubPath = level === 2 ? '/level-2' : '/assessment';
   const { showToast } = useToast();
 
   const [phase, setPhase] = useState('intro'); // intro | thinking | writing | result
@@ -68,7 +77,7 @@ export default function Writing() {
 
   const endExam = useCallback(() => {
     showToast('Exam ended — you left fullscreen too many times.', 'error');
-    navigate('/dashboard');
+    navigate(homePath);
   }, [navigate, showToast]);
   const { enter, leave, continueExam, warningOpen, warningCount, warningReason, maxWarnings } = useExamMode({
     active: phase === 'thinking' || phase === 'writing',
@@ -193,7 +202,7 @@ export default function Writing() {
   const start = async () => {
     enter();
     try {
-      const res = await startWriting();
+      const res = await startWriting(level);
       setData(res);
       setIndex(0);
       // Always show the intro video before every Writing attempt.
@@ -202,7 +211,7 @@ export default function Writing() {
     } catch (e) {
       leave();
       showToast(e?.response?.data?.message || 'Could not start writing', 'error');
-      if (e?.response?.status === 409) navigate('/assessment');
+      if (e?.response?.status === 409) navigate(hubPath);
     }
   };
 
@@ -220,7 +229,19 @@ export default function Writing() {
             in</strong>. You can go <strong>back</strong> to a task while it still has time. Your work
             auto-saves. The test runs in fullscreen — leaving it gives a warning (3 allowed).
           </Typography>
-          <Button variant="contained" size="large" onClick={start}>Start</Button>
+          <Alert severity="info" sx={{ mb: 2, textAlign: 'left', maxWidth: 560, mx: 'auto' }}>
+            <strong>House style — write for a US audience.</strong> Group digits in{' '}
+            <strong>threes</strong> like <strong>$1,250,000</strong> — not the Indian{' '}
+            <strong>12,50,000</strong>, and never <strong>lakh</strong> or <strong>crore</strong>.
+            All money is in <strong>US dollars ($)</strong>, never rupees. This is marked.
+          </Alert>
+          {/* Explicit way back before proctoring starts — no attempt is used yet. */}
+          <Stack direction="row" spacing={1.5} justifyContent="center">
+            <Button variant="outlined" size="large" startIcon={<ArrowBackIcon />} onClick={() => navigate(hubPath)}>
+              Back
+            </Button>
+            <Button variant="contained" size="large" onClick={start}>Start</Button>
+          </Stack>
         </CardContent>
       </Card>
     );
@@ -275,6 +296,7 @@ export default function Writing() {
               <Chip size="small" label={current.category} color="primary" variant="outlined" />
               <Chip size="small" variant="outlined" icon={<AccessTimeIcon />} label={`${Math.round(qSeconds / 60)} min to write`} />
               <Typography variant="caption" color="text.secondary">aim for {current.minWords}+ words</Typography>
+              <Chip size="small" variant="outlined" label="US format: $1,250,000" />
             </Stack>
             <Typography variant="body1" sx={{ whiteSpace: 'pre-line' }}>{current.prompt}</Typography>
           </CardContent>
@@ -308,8 +330,8 @@ export default function Writing() {
           <CardContent><WritingSection details={result.details} score={result.score} showHeader={false} /></CardContent>
         </Card>
         <Stack direction="row" spacing={1} sx={{ mb: 4 }}>
-          <Button variant="contained" onClick={() => navigate('/assessment')}>Back to Assessment</Button>
-          <Button variant="text" onClick={() => navigate('/dashboard')}>My Dashboard</Button>
+          <Button variant="contained" onClick={() => navigate(hubPath)}>Back to Assessment</Button>
+          <Button variant="text" onClick={() => navigate(homePath)}>My Dashboard</Button>
         </Stack>
       </Box>
     );
@@ -342,8 +364,13 @@ export default function Writing() {
         <CardContent>
           <Stack direction="row" justifyContent="space-between" alignItems="center" flexWrap="wrap" useFlexGap sx={{ mb: 1.5 }}>
             <Chip size="small" label={current.category} color="primary" variant="outlined" />
-            <Chip size="small" color={met ? 'success' : 'default'}
-              label={met ? `${count} words ✓` : `${count} words (aim ${minW}+)`} />
+            <Stack direction="row" spacing={1} alignItems="center">
+              {/* The number/currency convention stays on screen while they type — this is
+                  the habit the section is training, and it is scored. */}
+              <Chip size="small" variant="outlined" label="$1,250,000 · digits in threes · no lakh/crore" />
+              <Chip size="small" color={met ? 'success' : 'default'}
+                label={met ? `${count} words ✓` : `${count} words (aim ${minW}+)`} />
+            </Stack>
           </Stack>
           <Typography variant="body1" sx={{ mb: 2, whiteSpace: 'pre-line' }}>{current.prompt}</Typography>
 

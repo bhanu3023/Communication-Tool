@@ -51,7 +51,18 @@ public class AttemptDetailService {
 
     /** All submitted section attempts for the user, newest first, each with improvement + declines. */
     public List<AttemptDetail> attemptsFor(Long userId) {
-        List<AssessmentSession> all = sessionRepository.findByUserIdOrderByCreatedAtDesc(userId);
+        return attemptsFor(userId, null);
+    }
+
+    /**
+     * As above, restricted to one level when {@code level} is given. Improvement is
+     * always computed WITHIN a level — comparing a Level 2 score against a Level 1 one
+     * would be meaningless, since the content and pass mark differ.
+     */
+    public List<AttemptDetail> attemptsFor(Long userId, Integer level) {
+        List<AssessmentSession> all = level == null
+                ? sessionRepository.findByUserIdOrderByCreatedAtDesc(userId)
+                : sessionRepository.findByUserIdAndLevelOrderByCreatedAtDesc(userId, level);
 
         // Pass 1: parse each submitted attempt's details + per-dimension averages, keyed by section#attempt.
         Map<String, Double> scoreByKey = new HashMap<>();
@@ -62,7 +73,7 @@ public class AttemptDetailService {
             SectionResult r = sectionResultRepository
                     .findBySessionIdAndSection(s.getId(), s.getSection()).orElse(null);
             if (r == null) continue;
-            String key = s.getSection().name() + "#" + s.getAttemptNumber();
+            String key = key(s.getSection().name(), s.getLevel(), s.getAttemptNumber());
             Object details = json.fromJson(r.getDetails(), Object.class);
             scoreByKey.put(key, s.getScore());
             detailsByKey.put(key, details);
@@ -72,9 +83,9 @@ public class AttemptDetailService {
         List<AttemptDetail> out = new ArrayList<>();
         for (AssessmentSession s : all) {
             if (s.getSection() == null) continue;
-            String key = s.getSection().name() + "#" + s.getAttemptNumber();
+            String key = key(s.getSection().name(), s.getLevel(), s.getAttemptNumber());
             if (!detailsByKey.containsKey(key)) continue; // not submitted
-            String prevKey = s.getSection().name() + "#" + (s.getAttemptNumber() - 1);
+            String prevKey = key(s.getSection().name(), s.getLevel(), s.getAttemptNumber() - 1);
             Double prev = scoreByKey.get(prevKey);
             Double improvement = (prev != null && s.getScore() != null)
                     ? Math.round((s.getScore() - prev) * 10.0) / 10.0 : null;
@@ -84,11 +95,21 @@ public class AttemptDetailService {
             List<String> declined = hasPrevDims
                     ? changedAreas(dimsByKey.get(prevKey), dimsByKey.get(key), false) : List.of();
             out.add(new AttemptDetail(
-                    s.getId(), s.getSection().name(), s.getAttemptNumber(), DATE.format(s.getCreatedAt()),
+                    s.getId(), s.getSection().name(), s.getLevel(), s.getAttemptNumber(),
+                    DATE.format(s.getCreatedAt()),
                     s.getScore(), improvement, improved, declined, s.getProctorWarnings(), s.getStatus().name(),
                     detailsByKey.get(key)));
         }
         return out;
+    }
+
+    /**
+     * Map key for one attempt. The LEVEL must be part of it: Level 1 attempt #1 and
+     * Level 2 attempt #1 of the same section are different attempts, and keying on
+     * section+number alone would silently overwrite one with the other.
+     */
+    private static String key(String section, int level, int attemptNumber) {
+        return section + "#L" + level + "#" + attemptNumber;
     }
 
     /** Average of each rubric dimension across all items in an attempt's stored details. */

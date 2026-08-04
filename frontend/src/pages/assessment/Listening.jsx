@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Alert,
   Box,
@@ -15,6 +15,7 @@ import {
   Stack,
   Typography,
 } from '@mui/material';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import HeadphonesIcon from '@mui/icons-material/Headphones';
 import VolumeUpIcon from '@mui/icons-material/VolumeUp';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
@@ -31,6 +32,14 @@ import { useToast } from '../../contexts/ToastContext';
 
 export default function Listening() {
   const navigate = useNavigate();
+  // Which level's test this is. Comes from the URL (?level=2) so the page itself
+  // stays level-agnostic — the content, attempt count and pass mark all come back
+  // from /start for that level.
+  const [searchParams] = useSearchParams();
+  const level = Number(searchParams.get('level')) === 2 ? 2 : 1;
+  // Every exit from a Level 2 test returns to the Level 2 portal, never to Level 1.
+  const homePath = level === 2 ? '/level-2' : '/dashboard';
+  const hubPath = level === 2 ? '/level-2' : '/assessment';
   const { showToast } = useToast();
   const { speak, cancel, supported } = useSpeechSynthesis();
 
@@ -50,7 +59,7 @@ export default function Listening() {
   const endExam = useCallback(() => {
     cancel();
     showToast('Exam ended — you left fullscreen too many times.', 'error');
-    navigate('/dashboard');
+    navigate(homePath);
   }, [cancel, navigate, showToast]);
   const active = phase === 'listening' || phase === 'answering';
   const { enter, leave, continueExam, warningOpen, warningCount, warningReason, maxWarnings } = useExamMode({
@@ -120,7 +129,7 @@ export default function Listening() {
   const start = async () => {
     enter(); // inside the click gesture
     try {
-      const res = await startListening();
+      const res = await startListening(level);
       setData(res);
       setAudioPlaying(false);
       // Always show the intro video before every Listening attempt.
@@ -129,7 +138,7 @@ export default function Listening() {
     } catch (e) {
       leave();
       showToast(e?.response?.data?.message || 'Could not start listening', 'error');
-      if (e?.response?.status === 409) navigate('/assessment');
+      if (e?.response?.status === 409) navigate(hubPath);
     }
   };
 
@@ -153,9 +162,16 @@ export default function Listening() {
               Your browser does not support audio playback. The story will be shown as text instead.
             </Alert>
           )}
-          <Button variant="contained" size="large" onClick={start}>
-            Start
-          </Button>
+          {/* The instructions screen is the last point before proctoring starts, so it
+              keeps an explicit way back — nothing has been consumed yet. */}
+          <Stack direction="row" spacing={1.5} justifyContent="center">
+            <Button variant="outlined" size="large" startIcon={<ArrowBackIcon />} onClick={() => navigate(hubPath)}>
+              Back
+            </Button>
+            <Button variant="contained" size="large" onClick={start}>
+              Start
+            </Button>
+          </Stack>
         </CardContent>
       </Card>
     );
@@ -271,10 +287,10 @@ export default function Listening() {
             <Chip color="success" label={`Correct: ${details.correctCount ?? '—'}`} />
             <Chip color="error" label={`Wrong: ${details.wrongCount ?? '—'}`} />
           </Stack>
-          <Button variant="contained" onClick={() => navigate('/assessment')} sx={{ mr: 1 }}>
+          <Button variant="contained" onClick={() => navigate(hubPath)} sx={{ mr: 1 }}>
             Continue Assessment
           </Button>
-          <Button variant="text" onClick={() => navigate('/dashboard')}>
+          <Button variant="text" onClick={() => navigate(homePath)}>
             Back to Dashboard
           </Button>
         </CardContent>

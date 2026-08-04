@@ -33,7 +33,16 @@ public class AssessmentSession extends BaseEntity {
     @Enumerated(EnumType.STRING)
     private Section section;
 
-    /** Attempt number within this section (1-based). */
+    /**
+     * Which level this attempt belongs to (1 = the base tests, 2 = the advanced portal).
+     * Attempts, pass marks and content are all scoped per level, so a Level 2 attempt
+     * never touches a Level 1 allowance. Existing rows default to 1.
+     */
+    @Column(nullable = false)
+    @ColumnDefault("1")
+    private int level = 1;
+
+    /** Attempt number within this section AND level (1-based). */
     @Column(nullable = false)
     private int attemptNumber;
 

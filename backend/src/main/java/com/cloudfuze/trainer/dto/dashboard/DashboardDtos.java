@@ -10,6 +10,8 @@ public final class DashboardDtos {
     /** One section's card: its own attempts, latest/best score, improvement, and pass status. */
     public record SectionCard(
             String section,
+            int level,              // 1 = base tests, 2 = advanced portal
+            boolean levelUnlocked,  // false when this level's gate is still closed
             String status,          // "Not Started" | "Completed"
             Double latestScore,
             Double bestScore,
@@ -28,7 +30,8 @@ public final class DashboardDtos {
     public record ProgressPoint(String label, Double score) {
     }
 
-    public record HistoryItem(String date, String section, int attemptNumber, Double score, Double improvement) {
+    public record HistoryItem(String date, String section, int level, int attemptNumber,
+                              Double score, Double improvement) {
     }
 
     public record AiFeedback(List<String> strengths, List<String> weaknesses, List<String> suggestions) {
@@ -36,6 +39,9 @@ public final class DashboardDtos {
 
     public record EmployeeDashboard(
             String name,
+            int level,
+            boolean levelUnlocked,
+            boolean nextLevelUnlocked,   // is Level 2 open? drives the unlock moment in the UI
             List<SectionCard> cards,
             List<HistoryItem> history,
             AiFeedback aiFeedback) {

@@ -35,33 +35,38 @@ public class EmployeeController {
         this.currentUser = currentUser;
     }
 
-    @Operation(summary = "Get the current employee's dashboard")
+    @Operation(summary = "Get the current employee's dashboard for a level (1 = base, 2 = advanced). "
+            + "Set ai=true only if you render the coaching summary — it costs a live OpenAI call.")
     @GetMapping("/dashboard")
-    public DashboardDtos.EmployeeDashboard dashboard() {
-        return dashboardService.employeeDashboard(currentUser.user());
+    public DashboardDtos.EmployeeDashboard dashboard(
+            @RequestParam(defaultValue = "1") int level,
+            @RequestParam(defaultValue = "false") boolean ai) {
+        return dashboardService.employeeDashboard(currentUser.user(), level, ai);
     }
 
-    @Operation(summary = "Get the current employee's assessment history")
+    @Operation(summary = "Get the current employee's assessment history for a level")
     @GetMapping("/history")
-    public List<DashboardDtos.HistoryItem> history() {
-        return dashboardService.employeeDashboard(currentUser.user()).history();
+    public List<DashboardDtos.HistoryItem> history(@RequestParam(defaultValue = "1") int level) {
+        // History never shows coaching text, so this must not request it.
+        return dashboardService.employeeDashboard(currentUser.user(), level, false).history();
     }
 
-    @Operation(summary = "Per-section attempt cards (attempts used/allowed, latest score, improvement)")
+    @Operation(summary = "Per-section attempt cards for a level (attempts used/allowed, latest score, improvement)")
     @GetMapping("/sections")
-    public List<DashboardDtos.SectionCard> sections() {
-        return dashboardService.sectionCards(currentUser.user());
+    public List<DashboardDtos.SectionCard> sections(@RequestParam(defaultValue = "1") int level) {
+        return dashboardService.sectionCards(currentUser.user(), level);
     }
 
-    @Operation(summary = "Every completed attempt with full per-section feedback")
+    @Operation(summary = "Completed attempts with full per-section feedback; omit level for all levels")
     @GetMapping("/attempts")
-    public List<AttemptDetail> attempts() {
-        return attemptDetailService.attemptsFor(currentUser.user().getId());
+    public List<AttemptDetail> attempts(@RequestParam(required = false) Integer level) {
+        return attemptDetailService.attemptsFor(currentUser.user().getId(), level);
     }
 
-    @Operation(summary = "Request another attempt for a section after using all of them")
+    @Operation(summary = "Request another attempt for a section at a level after using all of them")
     @PostMapping("/request-attempt")
-    public DashboardDtos.SectionCard requestAttempt(@RequestParam Section section) {
-        return attemptService.requestAnother(currentUser.user(), section);
+    public DashboardDtos.SectionCard requestAttempt(@RequestParam Section section,
+                                                   @RequestParam(defaultValue = "1") int level) {
+        return attemptService.requestAnother(currentUser.user(), section, level);
     }
 }

@@ -94,6 +94,10 @@ public class WritingService {
     private static final int QUESTION_SECONDS = 360;  // 6 minutes each (2 tasks) → 14 min total with thinking
     private static final int EMAIL_MIN_WORDS = 60;    // a complete customer email
     private static final int OTHER_MIN_WORDS = 40;    // a complete internal message
+    // Level 2 tasks ask for materially more — a full escalation reply and a structured
+    // incident report — so the minimums rise with the level.
+    private static final int EMAIL_MIN_WORDS_L2 = 120;
+    private static final int OTHER_MIN_WORDS_L2 = 150;
 
     private final ContentService contentService;
     private final SessionService sessionService;
@@ -114,19 +118,23 @@ public class WritingService {
     }
 
     @Transactional
-    public WritingDtos.StartResponse start(User user) {
-        AssessmentSession session = sessionService.getOrCreateActiveSection(user, Section.WRITING);
+    public WritingDtos.StartResponse start(User user, int level) {
+        AssessmentSession session = sessionService.getOrCreateActiveSection(user, Section.WRITING, level);
         // Prompt 1 is always a customer email; prompt 2 is a varied task.
-        List<WritingPrompt> prompts = contentService.writingPrompts();
+        List<WritingPrompt> prompts = contentService.writingPrompts(session.getLevel());
         List<WritingDtos.PromptView> views = new ArrayList<>();
         int i = 1;
+        boolean advanced = session.getLevel() >= AttemptPolicy.LEVEL_TWO;
         for (WritingPrompt p : prompts) {
-            int minWords = ContentService.EMAIL_CATEGORY.equalsIgnoreCase(p.getCategory())
-                    ? EMAIL_MIN_WORDS : OTHER_MIN_WORDS;
+            boolean isEmail = ContentService.EMAIL_CATEGORY.equalsIgnoreCase(p.getCategory());
+            int minWords = advanced
+                    ? (isEmail ? EMAIL_MIN_WORDS_L2 : OTHER_MIN_WORDS_L2)
+                    : (isEmail ? EMAIL_MIN_WORDS : OTHER_MIN_WORDS);
             List<String> outline = OUTLINES.getOrDefault(p.getCategory(), DEFAULT_OUTLINE);
             views.add(new WritingDtos.PromptView(p.getId(), i++, p.getCategory(), p.getPrompt(), minWords, outline));
         }
-        auditService.log(user.getEmail(), "WRITING_START", "session=" + session.getId());
+        auditService.log(user.getEmail(), "WRITING_START",
+                "session=" + session.getId() + " level=" + session.getLevel());
         return new WritingDtos.StartResponse(
                 session.getId(), session.getAttemptNumber(), THINKING_SECONDS, OVERALL_SECONDS, QUESTION_SECONDS, views);
     }

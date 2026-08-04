@@ -11,6 +11,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -28,8 +29,8 @@ public class WritingController {
 
     @Operation(summary = "Start the writing section and receive 2 prompts")
     @PostMapping("/start")
-    public WritingDtos.StartResponse start() {
-        return writingService.start(currentUser.user());
+    public WritingDtos.StartResponse start(@RequestParam(defaultValue = "1") int level) {
+        return writingService.start(currentUser.user(), level);
     }
 
     @Operation(summary = "Auto-save a draft (every 15 seconds from the client)")

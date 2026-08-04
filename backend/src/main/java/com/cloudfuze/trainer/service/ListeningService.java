@@ -53,9 +53,9 @@ public class ListeningService {
     }
 
     @Transactional
-    public ListeningDtos.StartResponse start(User user) {
-        AssessmentSession session = sessionService.getOrCreateActiveSection(user, Section.LISTENING);
-        ListeningStory story = contentService.randomStory();
+    public ListeningDtos.StartResponse start(User user, int level) {
+        AssessmentSession session = sessionService.getOrCreateActiveSection(user, Section.LISTENING, level);
+        ListeningStory story = contentService.randomStory(session.getLevel());
         List<ListeningQuestion> questions = questionRepository.findByStoryIdOrderByOrdinalAsc(story.getId());
 
         List<ListeningDtos.QuestionView> views = new ArrayList<>();
@@ -65,7 +65,7 @@ public class ListeningService {
                     q.getOptionA(), q.getOptionB(), q.getOptionC(), q.getOptionD()));
         }
         auditService.log(user.getEmail(), "LISTENING_START",
-                "session=" + session.getId() + " story=" + story.getId());
+                "session=" + session.getId() + " level=" + session.getLevel() + " story=" + story.getId());
         return new ListeningDtos.StartResponse(session.getId(), session.getAttemptNumber(),
                 story.getTitle(), story.getScript(),
                 estimateAudioSeconds(story.getScript()), ANSWERING_SECONDS, views);

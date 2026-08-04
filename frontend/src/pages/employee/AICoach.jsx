@@ -1,14 +1,18 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Box, Button, Chip, Grid, Paper, Stack, Typography } from '@mui/material';
+import { Box, Button, Chip, Fade, Grid, Paper, Stack, Typography } from '@mui/material';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ReportProblemIcon from '@mui/icons-material/ReportProblem';
 import LightbulbOutlinedIcon from '@mui/icons-material/LightbulbOutlined';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import LoadingScreen from '../../components/LoadingScreen';
-import { getDashboard } from '../../services/assessmentService';
+import LevelTabs from '../../components/LevelTabs';
+import Level2Gate from '../../components/Level2Gate';
+import Level2Empty from '../../components/Level2Empty';
+import { getDashboard, getSections } from '../../services/assessmentService';
 import { useToast } from '../../contexts/ToastContext';
+import { isLevel1Complete, levelRules, rulesSummary } from '../../utils/levels';
 
 // Visual config per feedback column.
 const COLUMNS = [
@@ -93,21 +97,36 @@ function FeedbackColumn({ col, items }) {
  */
 export default function AICoach() {
   const [data, setData] = useState(null);
+  const [level1Cards, setLevel1Cards] = useState(null);
+  const [level, setLevel] = useState(1);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
   const { showToast } = useToast();
 
+  // Coaching is computed per level on the server (from that level's latest scores),
+  // so switching tabs refetches rather than filtering client-side.
   useEffect(() => {
-    getDashboard()
+    setLoading(true);
+    // This is the ONE page that renders the coaching summary, so it opts into the AI call.
+    getDashboard(level, { ai: true })
       .then(setData)
       .catch(() => showToast('Failed to load AI coach', 'error'))
       .finally(() => setLoading(false));
-  }, [showToast]);
+  }, [level, showToast]);
+
+  // Level 1 cards drive the gate, whichever tab is open.
+  useEffect(() => {
+    getSections(1)
+      .then(setLevel1Cards)
+      .catch(() => setLevel1Cards(null));
+  }, []);
 
   if (loading) return <LoadingScreen />;
   if (!data) return null;
 
   const fb = data.aiFeedback || {};
+  const level2Open = isLevel1Complete(level1Cards);
+  const hasLevel2Data = level === 2 && (data.cards || []).some((c) => c.attemptsUsed > 0);
 
   return (
     <Box>
@@ -142,23 +161,50 @@ export default function AICoach() {
           yet show how to get started. For attempt-by-attempt detail, open the{' '}
           <strong>Feedback</strong> section.
         </Typography>
+        <LevelTabs value={level} onChange={setLevel} cards={level1Cards} sx={{ mt: 2.5 }} />
       </Paper>
 
-      {/* Three feedback columns */}
-      <Grid container spacing={2.5}>
-        {COLUMNS.map((col) => (
-          <Grid item xs={12} md={4} key={col.key}>
-            <FeedbackColumn col={col} items={fb[col.key]} />
-          </Grid>
-        ))}
-      </Grid>
+      {level === 1 || hasLevel2Data ? (
+        <Fade in timeout={260} key={`coach-${level}`}>
+          <Box>
+            {/* Three feedback columns */}
+            <Grid container spacing={2.5}>
+              {COLUMNS.map((col) => (
+                <Grid item xs={12} md={4} key={col.key}>
+                  <FeedbackColumn col={col} items={fb[col.key]} />
+                </Grid>
+              ))}
+            </Grid>
 
-      {/* CTA */}
-      <Box sx={{ mt: 3 }}>
-        <Button variant="contained" endIcon={<ArrowForwardIcon />} onClick={() => navigate('/assessment')}>
-          Go to Test
-        </Button>
-      </Box>
+            {/* CTA */}
+            <Box sx={{ mt: 3 }}>
+              <Button
+                variant="contained"
+                endIcon={<ArrowForwardIcon />}
+                onClick={() => navigate(level === 2 ? '/level-2' : '/assessment')}
+              >
+                Go to Test
+              </Button>
+            </Box>
+          </Box>
+        </Fade>
+      ) : (
+        <Fade in timeout={260} key="coach2-empty">
+          <Box>
+            {level2Open ? (
+              <Level2Empty
+                title="Level 2 coaching starts with your first attempt"
+                body={`Your Level 2 portal is open (${rulesSummary(2)}). Once you complete a Level 2 test, your strengths, focus areas and suggestions for that level appear here — separate from your Level 1 coaching, and judged against the higher ${levelRules(2).passMark} bar.`}
+              />
+            ) : (
+              <Level2Gate
+                cards={level1Cards}
+                blurb={`Level 2 coaching unlocks with the portal. Pass every Level 1 section first — only your best attempt in each counts. Level 2 then runs on ${rulesSummary(2)}.`}
+              />
+            )}
+          </Box>
+        </Fade>
+      )}
     </Box>
   );
 }

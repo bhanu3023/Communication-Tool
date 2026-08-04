@@ -82,15 +82,29 @@ public class MockAiEvaluator {
         double tone = clamp(professionalism - 4);
         double readability = clamp((clarity + conciseness) / 2);
 
+        // Each house-style breach costs the two dimensions it actually damages, so the
+        // score moves with the mistake rather than the feedback contradicting the number.
+        int stylePenalty = Math.min(24, numberStyleIssues(text).size() * 8);
+        professionalism = clamp(professionalism - stylePenalty);
+        clarity = clamp(clarity - stylePenalty);
+        readability = clamp((clarity + conciseness) / 2);
+
         double overall = round((grammar + clarity + vocabulary + tone + professionalism
                 + structure + readability + completeness + spelling + conciseness) / 10.0);
 
         List<String> mistakes = new ArrayList<>();
+        // House style is graded, not just advertised: US digit grouping and dollars.
+        List<String> styleIssues = numberStyleIssues(text);
+        mistakes.addAll(styleIssues);
         if (words < 60) mistakes.add("Response is too short to fully address the task.");
         if (avgSentenceLen > 24) mistakes.add("Some sentences are long; break them up for clarity.");
         if (punctuationIssues(text) > 0) mistakes.add("Check punctuation and capitalization.");
 
         List<String> suggestions = new ArrayList<>();
+        if (!styleIssues.isEmpty()) {
+            suggestions.add("Write figures for a US reader: group digits in threes ($1,250,000) and "
+                    + "quote money in dollars — no lakh, crore or rupee amounts.");
+        }
         suggestions.add("Open with a clear purpose statement.");
         if (!hasGreetingOrSignoff(text, category))
             suggestions.add("Add an appropriate greeting and sign-off for a " + category.toLowerCase(Locale.ROOT) + ".");
@@ -217,6 +231,53 @@ public class MockAiEvaluator {
                 ? "Uniform, polished, generic style — common in AI-generated text."
                 : "Varied phrasing and imperfections consistent with human writing.";
         return new AiDetection(score, note);
+    }
+
+    /**
+     * House-style breaches in how numbers and money are written. The company writes for a
+     * US audience, so digits group in threes ($1,250,000); Indian grouping (12,50,000),
+     * lakh/crore, and rupee amounts are errors the Writing section deliberately trains out.
+     *
+     * Deterministic on purpose — this must hold even when OpenAI is unavailable and the
+     * mock evaluator is doing the marking.
+     */
+    List<String> numberStyleIssues(String content) {
+        List<String> issues = new ArrayList<>();
+        if (content == null || content.isBlank()) return issues;
+        String text = content;
+        String lower = text.toLowerCase(Locale.ROOT);
+
+        // Indian grouping: a 1-2 digit lead, then one or more 2-digit groups, then a final
+        // 3-digit group — 12,34,567 / 1,23,456. US grouping never has a 2-digit group.
+        java.util.regex.Matcher m = java.util.regex.Pattern
+                .compile("\\b\\d{1,2}(?:,\\d{2})+,\\d{3}\\b").matcher(text);
+        java.util.Set<String> found = new java.util.LinkedHashSet<>();
+        while (m.find()) found.add(m.group());
+        for (String bad : found) {
+            issues.add("\"" + bad + "\" uses Indian digit grouping — write it US-style as \""
+                    + regroupInThrees(bad) + "\".");
+        }
+
+        if (lower.matches("(?s).*\\b(lakh|lakhs|lac|lacs|crore|crores)\\b.*")) {
+            issues.add("Avoid lakh/crore — state the figure in full with digits grouped in threes "
+                    + "(e.g. 1,500,000).");
+        }
+        if (text.contains("₹") || lower.matches("(?s).*(\\brs\\.?\\s*\\d|\\binr\\b|\\brupees?\\b).*")) {
+            issues.add("Money must be quoted in US dollars ($), not rupees.");
+        }
+        return issues;
+    }
+
+    /** Re-groups the digits of a number into threes, preserving nothing but the digits. */
+    private String regroupInThrees(String grouped) {
+        String digits = grouped.replace(",", "");
+        StringBuilder out = new StringBuilder();
+        int count = 0;
+        for (int i = digits.length() - 1; i >= 0; i--) {
+            out.append(digits.charAt(i));
+            if (++count % 3 == 0 && i > 0) out.append(',');
+        }
+        return out.reverse().toString();
     }
 
     // --- heuristics ---

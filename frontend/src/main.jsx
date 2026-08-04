@@ -6,6 +6,7 @@ import { ThemeProvider, CssBaseline } from '@mui/material';
 import { msalInstance } from './authConfig';
 import theme from './theme';
 import App from './App';
+import ErrorBoundary from './components/ErrorBoundary';
 import { AuthProvider } from './contexts/AuthContext';
 import { ToastProvider } from './contexts/ToastContext';
 import './index.css';
@@ -19,7 +20,12 @@ function renderApp() {
           <BrowserRouter>
             <ToastProvider>
               <AuthProvider>
-                <App />
+                {/* Inside the theme so the fallback UI is styled, and inside the router so
+                    its Reload button works — but around App, so a crash in ANY screen shows
+                    a recoverable message instead of blanking the page. */}
+                <ErrorBoundary>
+                  <App />
+                </ErrorBoundary>
               </AuthProvider>
             </ToastProvider>
           </BrowserRouter>

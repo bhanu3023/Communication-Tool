@@ -10,6 +10,7 @@ import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -25,10 +26,10 @@ public class ListeningController {
         this.currentUser = currentUser;
     }
 
-    @Operation(summary = "Start the listening section and receive 10 questions")
+    @Operation(summary = "Start the listening section for a level and receive 10 questions")
     @PostMapping("/start")
-    public ListeningDtos.StartResponse start() {
-        return listeningService.start(currentUser.user());
+    public ListeningDtos.StartResponse start(@RequestParam(defaultValue = "1") int level) {
+        return listeningService.start(currentUser.user(), level);
     }
 
     @Operation(summary = "Submit listening answers and receive the score")

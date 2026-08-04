@@ -9,6 +9,7 @@ import {
   Card,
   CardContent,
   Chip,
+  Fade,
   Paper,
   Stack,
   Typography,
@@ -21,9 +22,13 @@ import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import AttemptReview from '../../components/AttemptReview';
 import LoadingScreen from '../../components/LoadingScreen';
-import { getMyAttempts } from '../../services/assessmentService';
+import LevelTabs from '../../components/LevelTabs';
+import Level2Gate from '../../components/Level2Gate';
+import Level2Empty from '../../components/Level2Empty';
+import { getMyAttempts, getSections } from '../../services/assessmentService';
 import { useToast } from '../../contexts/ToastContext';
 import { scoreColor } from '../../utils/format';
+import { isLevel1Complete, levelRules, rulesSummary } from '../../utils/levels';
 
 const SECTIONS = [
   { code: 'LISTENING', title: 'Listening', icon: <HeadphonesIcon />, color: '#1565c0' },
@@ -121,32 +126,72 @@ function SectionFeedback({ meta, attempts }) {
  */
 export default function Feedback() {
   const [attempts, setAttempts] = useState([]);
+  const [cards, setCards] = useState(null);
+  const [level, setLevel] = useState(1);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
   const { showToast } = useToast();
 
   useEffect(() => {
-    getMyAttempts()
-      .then((a) => setAttempts(a || []))
+    // Attempts for BOTH levels in one call (no level param = all levels); Level 1
+    // sections come along for the ride so the Level 2 tab can explain its own gate.
+    Promise.all([getMyAttempts(), getSections(1).catch(() => null)])
+      .then(([a, s]) => {
+        setAttempts(a || []);
+        setCards(s);
+      })
       .catch(() => showToast('Failed to load feedback', 'error'))
       .finally(() => setLoading(false));
   }, [showToast]);
 
   if (loading) return <LoadingScreen />;
 
-  const hasAny = attempts.length > 0;
+  // Each attempt now carries its own level, so the tabs simply filter on it.
+  const atLevel = attempts.filter((a) => (a.level ?? 1) === level);
+  const hasAny = atLevel.length > 0;
+  const level2Open = isLevel1Complete(cards);
 
   return (
     <Box>
       <Typography variant="h4" gutterBottom>
         Feedback
       </Typography>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
         Detailed results for every attempt. For your overall coaching summary, visit{' '}
         <strong>AI Coach</strong>.
       </Typography>
 
-      {!hasAny && (
+      <LevelTabs value={level} onChange={setLevel} cards={cards} sx={{ mb: 3 }} />
+
+      {level === 2 && hasAny && (
+        <Fade in timeout={260} key="level2-attempts">
+          <Stack spacing={3}>
+            {SECTIONS.map((s) => (
+              <SectionFeedback key={s.code} meta={s} attempts={atLevel.filter((a) => a.section === s.code)} />
+            ))}
+          </Stack>
+        </Fade>
+      )}
+
+      {level === 2 && !hasAny && (
+        <Fade in timeout={260} key="level2">
+          <Box>
+            {level2Open ? (
+              <Level2Empty
+                title="No Level 2 feedback yet"
+                body={`Your Level 2 portal is open (${rulesSummary(2)}). Complete a Level 2 test and its attempt-by-attempt breakdown will appear here, exactly like Level 1 — with each attempt marked against ${levelRules(2).passMark}.`}
+              />
+            ) : (
+              <Level2Gate
+                cards={cards}
+                blurb={`Level 2 feedback appears here once the portal is open. Every Level 1 section needs a passing best score first — only your best attempt counts. Level 2 then runs on ${rulesSummary(2)}.`}
+              />
+            )}
+          </Box>
+        </Fade>
+      )}
+
+      {level === 1 && !hasAny && (
         <Paper sx={{ p: 4, textAlign: 'center', borderRadius: 3 }}>
           <AutoAwesomeIcon color="primary" sx={{ fontSize: 40, mb: 1 }} />
           <Typography variant="h6" gutterBottom>
@@ -161,16 +206,14 @@ export default function Feedback() {
         </Paper>
       )}
 
-      {hasAny && (
-        <Stack spacing={3}>
-          {SECTIONS.map((s) => (
-            <SectionFeedback
-              key={s.code}
-              meta={s}
-              attempts={attempts.filter((a) => a.section === s.code)}
-            />
-          ))}
-        </Stack>
+      {level === 1 && hasAny && (
+        <Fade in timeout={260} key="level1">
+          <Stack spacing={3}>
+            {SECTIONS.map((s) => (
+              <SectionFeedback key={s.code} meta={s} attempts={atLevel.filter((a) => a.section === s.code)} />
+            ))}
+          </Stack>
+        </Fade>
       )}
     </Box>
   );

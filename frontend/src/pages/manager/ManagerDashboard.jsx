@@ -11,6 +11,7 @@ import {
   MenuItem,
   Paper,
   Select,
+  Stack,
   Typography,
   TextField,
 } from '@mui/material';
@@ -20,6 +21,8 @@ import GroupsIcon from '@mui/icons-material/GroupsOutlined';
 import GroupWorkIcon from '@mui/icons-material/GroupWorkOutlined';
 import LoadingScreen from '../../components/LoadingScreen';
 import { getTeam, getTeams } from '../../services/assessmentService';
+import LevelTabs from '../../components/LevelTabs';
+import { levelTheme, rulesSummary } from '../../utils/levels';
 import { useToast } from '../../contexts/ToastContext';
 
 const initialsOf = (name) =>
@@ -39,14 +42,17 @@ export default function ManagerDashboard() {
   const [status, setStatus] = useState('all'); // 'all' | 'attempted' | 'not_attempted'
   const [team, setTeam] = useState(''); // '' = all teams
   const [teams, setTeams] = useState([]);
+  const [level, setLevel] = useState(1);
 
+  // Scores are fetched per level: Level 1 and Level 2 have different pass marks and
+  // attempt allowances, so they are never mixed into one row.
   const load = useCallback(() => {
     setLoading(true);
-    getTeam({ search: search || undefined, team: team || undefined })
+    getTeam({ search: search || undefined, team: team || undefined, level })
       .then(setRows)
       .catch(() => showToast('Failed to load team', 'error'))
       .finally(() => setLoading(false));
-  }, [search, team, showToast]);
+  }, [search, team, level, showToast]);
 
   useEffect(() => {
     const t = setTimeout(load, 300); // debounce search
@@ -59,7 +65,8 @@ export default function ManagerDashboard() {
       .catch(() => {}); // filter is optional — silently degrade if teams can't load
   }, []);
 
-  const open = (id) => navigate(`/manager/employee/${id}`);
+  const open = (id) => navigate(`/manager/employee/${id}?level=${level}`);
+  const accent = levelTheme(level).accent;
 
   const hasAttempted = (r) =>
     (r.listeningAttempts || 0) + (r.speakingAttempts || 0) + (r.writingAttempts || 0) > 0;
@@ -87,8 +94,26 @@ export default function ManagerDashboard() {
       <Typography variant="h4" gutterBottom>
         Team Overview
       </Typography>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
         Review your team members&apos; communication assessment results.
+      </Typography>
+
+      {/* Level switcher — the whole table reports the selected level */}
+      <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 1 }} flexWrap="wrap" useFlexGap>
+        <LevelTabs value={level} onChange={setLevel} alwaysUnlocked />
+        <Chip size="small" variant="outlined" label={rulesSummary(level)} />
+        {level === 2 && (
+          <Chip
+            size="small"
+            label={`${rows.filter((r) => r.level2Unlocked).length} of ${rows.length} unlocked Level 2`}
+            sx={{ bgcolor: `${accent}14`, color: accent, fontWeight: 600 }}
+          />
+        )}
+      </Stack>
+      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 3 }}>
+        {level === 1
+          ? 'Level 1 is open to everyone. Passing all three sections unlocks Level 2.'
+          : 'Level 2 results only exist for employees who passed all three Level 1 sections.'}
       </Typography>
 
       {/* Search */}
@@ -213,6 +238,7 @@ export default function ManagerDashboard() {
                 borderTop: i === 0 ? 'none' : '1px solid',
                 borderColor: 'divider',
                 transition: 'background .15s',
+                opacity: level === 2 && !r.level2Unlocked ? 0.55 : 1,
                 '&:hover': { bgcolor: 'rgba(48,0,174,0.04)' },
               }}
             >

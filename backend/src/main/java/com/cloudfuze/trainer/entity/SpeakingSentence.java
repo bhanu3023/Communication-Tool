@@ -29,6 +29,11 @@ public class SpeakingSentence extends BaseEntity {
     @ColumnDefault("1")
     private int setNumber = 1;
 
+    /** Which level's bank this sentence belongs to (1 = base, 2 = advanced). */
+    @Column(nullable = false)
+    @ColumnDefault("1")
+    private int level = 1;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     @ColumnDefault("'MEDIUM'")

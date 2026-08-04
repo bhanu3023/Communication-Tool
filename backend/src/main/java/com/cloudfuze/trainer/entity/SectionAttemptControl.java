@@ -23,7 +23,7 @@ import org.hibernate.annotations.ColumnDefault;
 @Setter
 @Entity
 @Table(name = "section_attempt_control",
-        uniqueConstraints = @UniqueConstraint(columnNames = {"user_id", "section"}))
+        uniqueConstraints = @UniqueConstraint(columnNames = {"user_id", "section", "level"}))
 public class SectionAttemptControl extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
@@ -32,6 +32,11 @@ public class SectionAttemptControl extends BaseEntity {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private Section section;
+
+    /** Grants and requests are per section PER LEVEL — see {@code AttemptPolicy}. */
+    @Column(nullable = false)
+    @ColumnDefault("1")
+    private int level = 1;
 
     @Column(nullable = false)
     @ColumnDefault("0")

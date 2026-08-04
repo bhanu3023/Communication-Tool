@@ -5,17 +5,32 @@
 -- Runs after Hibernate creates the schema (defer-datasource-initialization).
 -- =====================================================================
 
+-- ---------- Schema fix-ups that must precede the seeds ----------
+-- Hibernate wrote a CHECK constraint on users.role from the Role enum when the table was
+-- first created, and `ddl-auto: update` does NOT widen an existing check constraint. Adding
+-- ADMIN to the enum therefore fails on any database created before it existed:
+--   ERROR: new row for relation "users" violates check constraint "users_role_check"
+-- Recreating it here (idempotent, and a no-op on a fresh DB where Hibernate already emits
+-- all three values) keeps existing databases bootable. There is no migration tool in this
+-- project, so data.sql is the only place such a change can live — see docs/ARCHITECTURE.md.
+ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;
+ALTER TABLE users ADD CONSTRAINT users_role_check
+    CHECK (role IN ('EMPLOYEE', 'MANAGER', 'ADMIN'));
+
 -- ---------- Department (single: Migration) ----------
 INSERT INTO department (created_at, updated_at, name)
 SELECT now(), now(), 'Migration'
 WHERE NOT EXISTS (SELECT 1 FROM department);
 
--- ---------- Teams (PIP, Migration, Test Users) ----------
+-- ---------- Teams (PIP, Migration, Test Users, Fresher) ----------
 -- Seeded per-name so new teams are added even on an already-initialised DB.
+-- Each team doubles as a filter option in the manager Team Overview, so adding a name
+-- here is all it takes to add a filter. No members are seeded for Fresher — admins place
+-- people into it from the User Access screen.
 INSERT INTO team (created_at, updated_at, name, department_id)
 SELECT now(), now(), v.name, d.id
 FROM department d
-CROSS JOIN (VALUES ('PIP'), ('Migration'), ('Test Users')) AS v(name)
+CROSS JOIN (VALUES ('PIP'), ('Migration'), ('Test Users'), ('Fresher')) AS v(name)
 WHERE d.name = 'Migration'
   AND NOT EXISTS (SELECT 1 FROM team t WHERE t.name = v.name);
 
@@ -32,18 +47,28 @@ JOIN department d ON d.name = 'Migration'
 JOIN team t ON t.name = 'Migration'
 WHERE NOT EXISTS (SELECT 1 FROM users WHERE role = 'MANAGER');
 
--- Manmadha is an admin (super-admin list is in ManagerController) and must be a MANAGER
--- to reach /api/manager/**. Per-email idempotent so it applies on an already-seeded DB:
--- create if absent, else promote an existing account to MANAGER.
+-- ---------- Admins ----------
+-- ADMIN is a real role now (see domain/Role). These are the bootstrap admins from
+-- AdminRegistry's configured list; they also keep admin rights by email whatever the stored
+-- role is, so the row is kept on ADMIN to avoid contradicting their actual access.
+-- Per-email idempotent: create if absent, else promote whatever role they currently hold.
 INSERT INTO users (created_at, updated_at, employee_id, name, email, role, department_id, team_id, manager_id)
-SELECT now(), now(), 'CF-1012', 'Manmadha Jayamangala', 'Manmadha.jayamangala@cloudfuze.com', 'MANAGER', d.id, t.id, NULL
+SELECT now(), now(), v.emp, v.name, v.email, 'ADMIN', d.id, t.id, NULL
 FROM department d
 JOIN team t ON t.name = 'Migration'
+CROSS JOIN (VALUES
+    ('CF-1012', 'Manmadha Jayamangala', 'Manmadha.jayamangala@cloudfuze.com'),
+    ('CF-1009', 'Abhinav Surattu',      'Abhinav.surattu@cloudfuze.com'),
+    ('CF-1011', 'Bhanu Srikakulam',     'Bhanu.Srikakulam@cloudfuze.com')
+    ) AS v(emp, name, email)
 WHERE d.name = 'Migration'
-  AND NOT EXISTS (SELECT 1 FROM users u WHERE lower(u.email) = 'manmadha.jayamangala@cloudfuze.com');
+  AND NOT EXISTS (SELECT 1 FROM users u WHERE lower(u.email) = lower(v.email));
 
-UPDATE users SET role = 'MANAGER', manager_id = NULL, updated_at = now()
-WHERE lower(email) = 'manmadha.jayamangala@cloudfuze.com' AND role <> 'MANAGER';
+UPDATE users SET role = 'ADMIN', manager_id = NULL, updated_at = now()
+WHERE lower(email) IN ('manmadha.jayamangala@cloudfuze.com',
+                       'abhinav.surattu@cloudfuze.com',
+                       'bhanu.srikakulam@cloudfuze.com')
+  AND role <> 'ADMIN';
 
 -- ---------- Employees ----------
 -- Real employees are provisioned automatically on their first Microsoft sign-in
@@ -97,9 +122,33 @@ WHERE lower(email) IN (
     'lavanya.gopasana@cloudfuze.com', 'anush.dasari@cloudfuze.com', 'joy.prakash@cloudfuze.com')
   AND team_id IS DISTINCT FROM (SELECT id FROM team WHERE name = 'Test Users');
 
--- Default team: any existing employee not explicitly placed in PIP/Test Users falls back
--- to Migration (matches the "everyone else is Migration" rule; new sign-ins get this in
--- AuthService). Only touches rows with no team, so PIP/Test assignments are preserved.
+-- Fresher team members. Same pattern as PIP: create if absent, else move into Fresher.
+-- NOTE srinidh.perla@cloudfuze.com was deliberately EXCLUDED from this list at the user's
+-- request — do not add them here without being asked.
+INSERT INTO users (created_at, updated_at, employee_id, name, email, role, department_id, team_id, manager_id)
+SELECT now(), now(), v.emp, v.name, v.email, 'EMPLOYEE', t.department_id, t.id, m.id
+FROM (VALUES
+    ('CF-FR-01', 'Venkatesh Kudukala', 'Venkatesh.Kudukala@cloudfuze.com'),
+    ('CF-FR-02', 'Nithish Bunne',      'Nithish.Bunne@cloudfuze.com'),
+    ('CF-FR-03', 'Purushotham Kurva',  'Purushotham.Kurva@cloudfuze.com'),
+    ('CF-FR-04', 'Sanjana Nerella',    'sanjana.nerella@cloudfuze.com'),
+    ('CF-FR-05', 'Tanmai Arangi',      'tanmai.arangi@cloudfuze.com'),
+    ('CF-FR-06', 'Ambika Patil',       'ambika.patil@cloudfuze.com')
+    ) AS v(emp, name, email)
+JOIN team t ON t.name = 'Fresher'
+LEFT JOIN users m ON lower(m.email) = 'abhishek.sakala@cloudfuze.com' AND m.role = 'MANAGER'
+WHERE NOT EXISTS (SELECT 1 FROM users u WHERE lower(u.email) = lower(v.email));
+
+UPDATE users SET team_id = (SELECT id FROM team WHERE name = 'Fresher'), updated_at = now()
+WHERE lower(email) IN (
+    'venkatesh.kudukala@cloudfuze.com', 'nithish.bunne@cloudfuze.com',
+    'purushotham.kurva@cloudfuze.com', 'sanjana.nerella@cloudfuze.com',
+    'tanmai.arangi@cloudfuze.com', 'ambika.patil@cloudfuze.com')
+  AND team_id IS DISTINCT FROM (SELECT id FROM team WHERE name = 'Fresher');
+
+-- Default team: any existing employee not explicitly placed in PIP/Test Users/Fresher falls
+-- back to Migration (matches the "everyone else is Migration" rule; new sign-ins get this in
+-- AuthService). Only touches rows with no team, so the assignments above are preserved.
 UPDATE users SET team_id = (SELECT id FROM team WHERE name = 'Migration'), updated_at = now()
 WHERE role = 'EMPLOYEE' AND team_id IS NULL;
 
@@ -1301,11 +1350,121 @@ WHERE NOT EXISTS (SELECT 1 FROM speaking_sentence);
 UPDATE speaking_sentence s SET difficulty = b.d
 FROM (SELECT id, CASE ntile(3) OVER (ORDER BY length(text), id)
                      WHEN 1 THEN 'EASY' WHEN 2 THEN 'MEDIUM' ELSE 'HARD' END AS d
-      FROM speaking_sentence) b
+      FROM speaking_sentence WHERE level = 1) b
 WHERE s.id = b.id;
 
 -- Writing is tagged by task type (more meaningful than length).
 UPDATE writing_prompt SET difficulty =
     CASE WHEN category IN ('Slack Message', 'Status Update', 'Professional Email', 'Reminder', 'Announcement') THEN 'EASY'
          WHEN category IN ('Incident Report', 'Escalation', 'Issue Resolution', 'Proposal', 'Handover') THEN 'HARD'
-         ELSE 'MEDIUM' END;
+         ELSE 'MEDIUM' END
+WHERE level = 1;
+
+-- =====================================================================
+-- LEVEL 2 — the advanced portal (2 attempts per section, pass mark 80).
+-- Unlocks only after all three Level 1 sections are passed. Content is a
+-- separate bank keyed by `level = 2`; every item is migration-domain and
+-- all money is in US dollars.
+-- =====================================================================
+
+-- Legacy schema fix: section_attempt_control used to be unique on
+-- (user_id, section). Grants/requests are now per LEVEL too, so that old
+-- constraint would reject a Level 2 row for a section that already has a
+-- Level 1 row. Hibernate's ddl-auto=update adds the new (user_id, section,
+-- level) constraint but never drops the superseded one, so drop it here.
+--
+-- The name is Hibernate's deterministic hash for UNIQUE (user_id, section), so it
+-- is the same in every database built from this mapping. Written as a single
+-- IF EXISTS statement on purpose: Spring's data.sql runner splits on ';' and
+-- cannot parse a $$-quoted plpgsql block, which would break startup.
+ALTER TABLE section_attempt_control DROP CONSTRAINT IF EXISTS ukl815wq71t0m53ixmh9lp1t443;
+
+-- ---------- Level 2 listening: one dense cutover briefing ----------
+INSERT INTO listening_story (created_at, updated_at, title, script, level, difficulty)
+SELECT now(), now(), 'The Atlas Cutover',
+'At 21:40 on Friday the migration desk froze the source tenant for Atlas Freight, a logistics firm moving sixty-eight terabytes from Google Workspace to Microsoft 365. Programme lead Ines Okafor had budgeted a thirty-four hour window and forty-six thousand dollars of professional services against it. The first six hours ran clean: one point four million items, zero failures. Then throughput collapsed from nine hundred gigabytes an hour to under two hundred. Engineer Rahul Menon assumed the tenant was being throttled and asked to spin up four more agents. His colleague Dana Whitfield disagreed and pulled the connector logs instead. She was right. The bottleneck was not the API — it was a single shared drive holding one hundred and ninety thousand files in one flat folder, which the connector was re-enumerating on every pass. More agents would each have repeated that same expensive scan and made the stall worse. They excluded that drive, recovered full throughput within forty minutes, and moved it separately using a flat pre-stage. Two problems were deferred rather than solved. External shares were converted to read-only links, which the client accepted for the pilot group only. And three thousand one hundred items breached the path-length limit; those went to a remediation queue untouched. The cutover completed at 06:10 on Sunday, four hours inside the window, but the invoice grew by seven thousand five hundred dollars for the extra weekend engineering. In the retrospective Ines recorded three actions: cap folder enumeration at fifty thousand items, require a pre-flight scan of the twenty largest folders by file count, and stop treating any throughput drop as throttling until the logs confirm it. Of the eleven risks on the register, only one materialised.',
+       2, 'HARD'
+WHERE NOT EXISTS (SELECT 1 FROM listening_story WHERE level = 2);
+
+-- ---------- Level 2 listening questions (inference-first) ----------
+INSERT INTO listening_question (created_at, updated_at, story_id, ordinal, question_text,
+                                option_a, option_b, option_c, option_d, correct_option)
+SELECT now(), now(), s.id, v.ordinal, v.q, v.a, v.b, v.c, v.d, v.correct
+FROM (VALUES
+    (1, 'What actually caused the throughput collapse?',
+     'Microsoft throttling the destination tenant',
+     'One flat folder of 190,000 files being re-enumerated every pass',
+     'Too few migration agents for the volume',
+     'The 3,100 path-length failures', 'B'),
+    (2, 'Why would adding four more agents have made the situation worse?',
+     'Each agent would have repeated the same expensive folder scan',
+     'The source tenant was frozen and could not accept connections',
+     'Agents cannot run during a cutover window',
+     'The licence cost would have exceeded the budget', 'A'),
+    (3, 'Whose judgement proved correct, and on what basis?',
+     'Rahul, because throttling is the usual cause',
+     'Ines, because she owned the budget',
+     'Dana, because she checked the logs before acting',
+     'The client, because they limited the pilot', 'C'),
+    (4, 'Which issue was DEFERRED rather than resolved during the cutover?',
+     'The shared-drive bottleneck',
+     'The path-length breaches',
+     'The throughput collapse',
+     'The source-tenant freeze', 'B'),
+    (5, 'What did the engagement cost in total once the cutover closed?',
+     '$46,000', '$7,500', '$53,500', '$38,500', 'C'),
+    (6, 'How much of the booked window went unused?',
+     '40 minutes', '4 hours', '6 hours', '34 hours', 'B'),
+    (7, 'How far did the client accept the read-only external-share workaround?',
+     'For the whole organisation',
+     'For the pilot group only',
+     'They rejected it outright',
+     'It was never put to them', 'B'),
+    (8, 'Which retrospective action changes an EXISTING habit rather than adding a new control?',
+     'Capping folder enumeration at 50,000 items',
+     'Requiring a pre-flight scan of the 20 largest folders',
+     'No longer assuming throttling until the logs confirm it',
+     'Raising the professional-services budget', 'C'),
+    (9, 'What does the line about only one of eleven registered risks materialising most reasonably imply?',
+     'The risk register was largely wasted effort',
+     'The team planned for considerably more than actually went wrong',
+     'Ten risks went unrecorded during the cutover',
+     'The migration should be treated as a failure', 'B'),
+    (10, 'Which single sentence best summarises the briefing?',
+     'A migration delayed by API throttling and recovered with extra capacity',
+     'A migration rescued by reading the logs instead of adding capacity',
+     'A migration that overran its window and lost the client',
+     'A migration blocked by legal hold and external sharing', 'B')
+    ) AS v(ordinal, q, a, b, c, d, correct)
+JOIN listening_story s ON s.level = 2 AND s.title = 'The Atlas Cutover'
+WHERE NOT EXISTS (
+    SELECT 1 FROM listening_question lq JOIN listening_story ls ON ls.id = lq.story_id WHERE ls.level = 2);
+
+-- ---------- Level 2 speaking: 10 sentences, two lines minimum ----------
+-- One set of 10: migration terminology + business idiom + spoken figures in dollars.
+INSERT INTO speaking_sentence (created_at, updated_at, text, set_number, level, difficulty)
+SELECT now(), now(), v.text, 1, 2, 'HARD'
+FROM (VALUES
+    ('Before we green-light the cutover I need a ballpark on the delta pass, because if the Graph API keeps throttling us at four hundred requests a minute we are looking at roughly eighteen more hours and about twelve thousand dollars of overtime that nobody has budgeted for.'),
+    ('The client wants to kick the tires on a proof of concept first, so we will pre-stage two hundred and forty gigabytes from their Google shared drives into SharePoint, run a dry pass over the weekend, and circle back on Monday morning with the reconciliation report.'),
+    ('Heads-up on their legacy Box tenant: the groups are nested four levels deep, and if we map those permissions one-to-one we will blow straight past the five-thousand-member ceiling, so let us flatten the access lists before somebody drops the ball on go-live.'),
+    ('I do not want to boil the ocean here, so we migrate the finance department''s forty-two terabytes first, validate every checksum against the source, and only then spin up the remaining eight hundred seats at nineteen dollars per user per month.'),
+    ('We hit a wall with the service account overnight: the admin consent had quietly lapsed, every delta sync came back with a four-oh-one, and roughly nine hundred item-level errors are now sitting in the remediation queue waiting on somebody''s approval.'),
+    ('To be blunt, the timeline is not realistic, because if procurement cannot turn the statement of work around by Thursday the migration window slips past quarter-end and we forfeit the thirty-thousand-dollar early-completion credit we already quoted them.'),
+    ('Let me loop in the security team before anyone touches the retention policies, because anything under legal hold has to survive the move byte for byte, and eDiscovery will absolutely audit us on it two or three months down the line.'),
+    ('The user experience matters far more than raw throughput on this one, because if people log in on Monday and every shared link is broken, it will not matter that we moved sixty terabytes in a single weekend — they will call it a failed migration.'),
+    ('Quick win worth flagging on the status call: switching to incremental passes cut our reprocessing by about thirty-eight percent, which claws back nearly four thousand dollars of compute and buys us a full day of buffer before the hard stop.'),
+    ('I will be straight with you — we are in the weeds on the path-length failures, so I would rather push the announcement by forty-eight hours than promise a clean cutover and then spend the next fortnight apologising to their executive sponsor.')
+    ) AS v(text)
+WHERE NOT EXISTS (SELECT 1 FROM speaking_sentence WHERE level = 2);
+
+-- ---------- Level 2 writing: 2 advanced tasks ----------
+INSERT INTO writing_prompt (created_at, updated_at, category, prompt, level, difficulty)
+SELECT now(), now(), v.category, v.prompt, 2, 'HARD'
+FROM (VALUES
+    ('Customer Email',
+     'You are the migration lead for Atlas Freight. It is 08:15 on Monday, the first working day after the cutover. Their CIO, Marcus Bell, has emailed you in plain frustration: 3,100 files are missing for his logistics team, and two of his managers have already escalated to your VP. The cause is the path-length limit — those files exceeded the destination''s 400-character path and were parked in a remediation queue rather than lost. Your team can restore them in batches by 18:00 Tuesday, and CloudFuze has approved a $7,500 service credit. Write the reply to Marcus. Explain the cause without hiding behind jargon, commit to a specific ETA and owner, offer the credit, say what prevents a repeat, and give him one clear next step.'),
+    ('Incident Report',
+     'Write the internal incident report for the Atlas Freight throughput stall. The facts: the tenant was frozen 21:40 Friday; the first six hours moved 1.4 million items with zero failures; throughput then fell from 900 GB/hour to under 200 GB/hour; an engineer proposed adding four agents, but the logs showed a single flat folder of 190,000 files being re-enumerated on every pass, so more agents would have worsened it; excluding that drive restored throughput within 40 minutes; the cutover still closed 06:10 Sunday, four hours inside the window, at $7,500 over the $46,000 budget. Cover: one-line summary, timeline, root cause, impact including cost, what was done, and the prevention measures — one of which must change an existing assumption, not just add a check.')
+    ) AS v(category, prompt)
+WHERE NOT EXISTS (SELECT 1 FROM writing_prompt WHERE level = 2);

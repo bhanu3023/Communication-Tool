@@ -11,7 +11,11 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-/** Randomly selects question/sentence/prompt banks for each new assessment. */
+/**
+ * Selects question/sentence/prompt banks for each new assessment, scoped to the level
+ * being attempted. Each level has its own bank (see the {@code level} column on the
+ * content entities), so a Level 2 attempt can never serve Level 1 content.
+ */
 @Service
 public class ContentService {
 
@@ -24,25 +28,25 @@ public class ContentService {
         this.writingRepo = writingRepo;
     }
 
-    /** Picks one random listening story (its audio + comprehension questions). */
-    public ListeningStory randomStory() {
-        List<ListeningStory> stories = pickRandom(listeningStoryRepo.findAll(), 1);
-        if (stories.isEmpty()) {
-            throw new ResourceNotFoundException("No listening stories are configured");
+    /** Picks one random listening story from the given level's bank. */
+    public ListeningStory randomStory(int level) {
+        List<ListeningStory> pool = listeningStoryRepo.findByLevelOrderByIdAsc(level);
+        if (pool.isEmpty()) {
+            throw new ResourceNotFoundException("No listening stories are configured for level " + level);
         }
-        return stories.get(0);
+        return pickRandom(pool, 1).get(0);
     }
 
     /** The category used for customer-email prompts (always the first writing task). */
     public static final String EMAIL_CATEGORY = "Customer Email";
 
     /**
-     * Two writing tasks for one attempt: prompt 1 is always a customer EMAIL,
-     * prompt 2 is a random task of any other type. Falls back gracefully if the
-     * bank is missing one group.
+     * Two writing tasks for one attempt: prompt 1 is always a customer EMAIL, prompt 2
+     * is a task of any other type, both from the given level's bank. Falls back
+     * gracefully if the bank is missing one group.
      */
-    public List<WritingPrompt> writingPrompts() {
-        List<WritingPrompt> all = writingRepo.findAll();
+    public List<WritingPrompt> writingPrompts(int level) {
+        List<WritingPrompt> all = writingRepo.findByLevelOrderByIdAsc(level);
         List<WritingPrompt> emails = new ArrayList<>();
         List<WritingPrompt> others = new ArrayList<>();
         for (WritingPrompt p : all) {
@@ -51,7 +55,9 @@ public class ContentService {
         List<WritingPrompt> out = new ArrayList<>();
         if (!emails.isEmpty()) out.add(pickRandom(emails, 1).get(0));
         if (!others.isEmpty()) out.add(pickRandom(others, 1).get(0));
-        if (out.isEmpty()) throw new ResourceNotFoundException("No writing prompts are configured");
+        if (out.isEmpty()) {
+            throw new ResourceNotFoundException("No writing prompts are configured for level " + level);
+        }
         return out;
     }
 

@@ -1,9 +1,11 @@
 package com.cloudfuze.trainer.controller;
 
+import com.cloudfuze.trainer.domain.Role;
 import com.cloudfuze.trainer.domain.Section;
 import com.cloudfuze.trainer.dto.AttemptDetail;
 import com.cloudfuze.trainer.dto.manager.ManagerDtos;
 import com.cloudfuze.trainer.exception.ApiException;
+import com.cloudfuze.trainer.security.AdminRegistry;
 import com.cloudfuze.trainer.security.CurrentUser;
 import com.cloudfuze.trainer.service.AttemptDetailService;
 import com.cloudfuze.trainer.service.AttemptService;
@@ -11,6 +13,7 @@ import com.cloudfuze.trainer.service.ManagerService;
 import com.cloudfuze.trainer.service.PdfService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -21,6 +24,7 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -34,7 +38,10 @@ import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/manager")
-@PreAuthorize("hasRole('MANAGER')")
+// ADMIN is a superset of MANAGER, so it must be listed here as well as in SecurityConfig —
+// this method-security rule is a SECOND gate, and leaving it MANAGER-only would 403 every
+// admin on the whole controller.
+@PreAuthorize("hasAnyRole('MANAGER','ADMIN')")
 @Tag(name = "Manager", description = "Team overview and employee reports")
 public class ManagerController {
 
@@ -43,28 +50,23 @@ public class ManagerController {
     private final PdfService pdfService;
     private final AttemptService attemptService;
     private final CurrentUser currentUser;
-    private final Set<String> superAdminEmails;
+    private final AdminRegistry adminRegistry;
 
     public ManagerController(ManagerService managerService, AttemptDetailService attemptDetailService,
                              PdfService pdfService, AttemptService attemptService, CurrentUser currentUser,
-                             @Value("${app.super-admin-emails:abhinav.surattu@cloudfuze.com,bhanu.srikakulam@cloudfuze.com,manmadha.jayamangala@cloudfuze.com}")
-                             String superAdminEmails) {
+                             AdminRegistry adminRegistry) {
         this.managerService = managerService;
         this.attemptDetailService = attemptDetailService;
         this.pdfService = pdfService;
         this.attemptService = attemptService;
         this.currentUser = currentUser;
-        this.superAdminEmails = Arrays.stream(superAdminEmails.split(","))
-                .map(String::trim)
-                .filter(s -> !s.isEmpty())
-                .map(s -> s.toLowerCase(Locale.ROOT))
-                .collect(Collectors.toSet());
+        this.adminRegistry = adminRegistry;
     }
 
-    /** Only a configured super-admin (default: Abhinav, Bhanu) may manage manager access. */
+    /** Only an admin may use the User Access screen (add users, manage roles and teams). */
     private void requireSuperAdmin() {
-        if (!superAdminEmails.contains(currentUser.user().getEmail().toLowerCase(Locale.ROOT))) {
-            throw new ApiException(HttpStatus.FORBIDDEN, "Only an administrator can manage manager access");
+        if (!adminRegistry.isAdmin(currentUser.user())) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "Only an administrator can manage user access");
         }
     }
 
@@ -73,8 +75,9 @@ public class ManagerController {
     public List<ManagerDtos.TeamRow> team(
             @RequestParam(required = false) String search,
             @RequestParam(required = false) String team,
-            @RequestParam(required = false) String department) {
-        return managerService.team(currentUser.user(), search, team, department);
+            @RequestParam(required = false) String department,
+            @RequestParam(defaultValue = "1") int level) {
+        return managerService.team(currentUser.user(), search, team, department, level);
     }
 
     @Operation(summary = "List the available team names for the Team Overview filter")
@@ -85,27 +88,31 @@ public class ManagerController {
 
     @Operation(summary = "Get the full detail for one team member")
     @GetMapping("/employee/{id}")
-    public ManagerDtos.EmployeeDetail employee(@PathVariable Long id) {
-        return managerService.employeeDetail(currentUser.user(), id);
+    public ManagerDtos.EmployeeDetail employee(@PathVariable Long id,
+                                               @RequestParam(defaultValue = "1") int level) {
+        return managerService.employeeDetail(currentUser.user(), id, level);
     }
 
     @Operation(summary = "Alias of employee detail used by the report view")
     @GetMapping("/report/{id}")
-    public ManagerDtos.EmployeeDetail report(@PathVariable Long id) {
-        return managerService.employeeDetail(currentUser.user(), id);
+    public ManagerDtos.EmployeeDetail report(@PathVariable Long id,
+                                             @RequestParam(defaultValue = "1") int level) {
+        return managerService.employeeDetail(currentUser.user(), id, level);
     }
 
     @Operation(summary = "Every completed attempt for a team member, with full per-section feedback")
     @GetMapping("/employee/{id}/attempts")
-    public List<AttemptDetail> employeeAttempts(@PathVariable Long id) {
-        return attemptDetailService.attemptsFor(id);
+    public List<AttemptDetail> employeeAttempts(@PathVariable Long id,
+                                                @RequestParam(required = false) Integer level) {
+        return attemptDetailService.attemptsFor(id, level);
     }
 
     @Operation(summary = "Grant one additional attempt to a team member for a section")
     @PostMapping("/employee/{id}/grant-attempt")
-    public ManagerDtos.EmployeeDetail grantAttempt(@PathVariable Long id, @RequestParam Section section) {
-        attemptService.grant(currentUser.user(), id, section, 1);
-        return managerService.employeeDetail(currentUser.user(), id);
+    public ManagerDtos.EmployeeDetail grantAttempt(@PathVariable Long id, @RequestParam Section section,
+                                                   @RequestParam(defaultValue = "1") int level) {
+        attemptService.grant(currentUser.user(), id, section, level, 1);
+        return managerService.employeeDetail(currentUser.user(), id, level);
     }
 
     @Operation(summary = "List all managers (admin only)")
@@ -123,6 +130,43 @@ public class ManagerController {
         return managerService.managers();
     }
 
+    @Operation(summary = "List every user with their role and team (admin only)")
+    @GetMapping("/access/users")
+    public List<ManagerDtos.UserRow> users() {
+        requireSuperAdmin();
+        return managerService.allUsers();
+    }
+
+    @Operation(summary = "Change an existing user's role and team (admin only)")
+    @PutMapping("/access/users/{id}")
+    public ManagerDtos.UserRow updateUser(@PathVariable Long id,
+                                          @Valid @RequestBody ManagerDtos.UpdateUserRequest request) {
+        requireSuperAdmin();
+        // Same protection as the add path: a bootstrap-list admin keeps admin rights whatever
+        // the database says, so we refuse to store a role that contradicts that.
+        ManagerDtos.UserRow target = managerService.allUsers().stream()
+                .filter(u -> u.id().equals(id))
+                .findFirst()
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "User not found"));
+        if (request.role() != Role.ADMIN && adminRegistry.isBootstrapAdmin(target.email())) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "This administrator's role cannot be changed");
+        }
+        return managerService.updateUser(id, request, currentUser.user().getEmail());
+    }
+
+    @Operation(summary = "Add a user with a role and team, or re-assign an existing one (admin only)")
+    @PostMapping("/access/users")
+    public ManagerDtos.AddedUser addUser(@Valid @RequestBody ManagerDtos.AddUserRequest request) {
+        requireSuperAdmin();
+        // A bootstrap-list admin keeps admin rights whatever the database says, so storing a
+        // lesser role would make the row contradict their real access.
+        if (request.role() != Role.ADMIN && adminRegistry.isBootstrapAdmin(request.email())) {
+            throw new ApiException(HttpStatus.FORBIDDEN,
+                    "This administrator's role cannot be changed");
+        }
+        return managerService.addUser(request, currentUser.user().getEmail());
+    }
+
     @Operation(summary = "Revoke a user's manager access (admin only)")
     @DeleteMapping("/access/managers/{id}")
     public List<ManagerDtos.ManagerRow> revokeManager(@PathVariable Long id) {
@@ -132,8 +176,8 @@ public class ManagerController {
                 .findFirst()
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Manager not found"));
         // An administrator's access can never be revoked (this also blocks self-revoke,
-        // since only super-admins reach this endpoint).
-        if (superAdminEmails.contains(target.email().toLowerCase(Locale.ROOT))) {
+        // since only admins reach this endpoint).
+        if (adminRegistry.isBootstrapAdmin(target.email())) {
             throw new ApiException(HttpStatus.FORBIDDEN, "An administrator's access cannot be revoked");
         }
         return managerService.revokeManager(id);
@@ -141,8 +185,9 @@ public class ManagerController {
 
     @Operation(summary = "Download a PDF report for one team member")
     @GetMapping("/download-pdf/{id}")
-    public ResponseEntity<byte[]> downloadPdf(@PathVariable Long id) {
-        ManagerDtos.EmployeeDetail detail = managerService.employeeDetail(currentUser.user(), id);
+    public ResponseEntity<byte[]> downloadPdf(@PathVariable Long id,
+                                              @RequestParam(defaultValue = "1") int level) {
+        ManagerDtos.EmployeeDetail detail = managerService.employeeDetail(currentUser.user(), id, level);
         byte[] pdf = pdfService.employeeReport(detail);
         String filename = "report-" + detail.employeeCode() + ".pdf";
         return ResponseEntity.ok()

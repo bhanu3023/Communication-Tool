@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Alert,
   Box,
@@ -14,6 +14,7 @@ import {
   Stack,
   Typography,
 } from '@mui/material';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import MicIcon from '@mui/icons-material/Mic';
 import HeadphonesIcon from '@mui/icons-material/Headphones';
 import StopIcon from '@mui/icons-material/Stop';
@@ -54,6 +55,14 @@ const INTRO_STEPS = [
 
 export default function Speaking() {
   const navigate = useNavigate();
+  // Which level's test this is. Comes from the URL (?level=2) so the page itself
+  // stays level-agnostic — the content, attempt count and pass mark all come back
+  // from /start for that level.
+  const [searchParams] = useSearchParams();
+  const level = Number(searchParams.get('level')) === 2 ? 2 : 1;
+  // Every exit from a Level 2 test returns to the Level 2 portal, never to Level 1.
+  const homePath = level === 2 ? '/level-2' : '/dashboard';
+  const hubPath = level === 2 ? '/level-2' : '/assessment';
   const { showToast } = useToast();
   const { supported, transcript, error: speechError, start: startMic, stop: stopMic, setTranscript } =
     useSpeechRecognition();
@@ -115,7 +124,7 @@ export default function Speaking() {
   const endExam = useCallback(() => {
     stopMic();
     showToast('Exam ended — you left fullscreen too many times.', 'error');
-    navigate('/dashboard');
+    navigate(homePath);
   }, [navigate, showToast, stopMic]);
   const { enter, leave, continueExam, warningOpen, warningCount, warningReason, maxWarnings } = useExamMode({
     active: phase === 'active',
@@ -218,7 +227,7 @@ export default function Speaking() {
     mic.stop();
     enter(); // inside the click gesture
     try {
-      const res = await startSpeaking();
+      const res = await startSpeaking(level);
       setData(res);
       // Always show the intro video before every Speaking attempt.
       setVideoEnded(false);
@@ -226,7 +235,7 @@ export default function Speaking() {
     } catch (e) {
       leave();
       showToast(e?.response?.data?.message || 'Could not start speaking', 'error');
-      if (e?.response?.status === 409) navigate('/assessment');
+      if (e?.response?.status === 409) navigate(hubPath);
     }
   };
 
@@ -377,11 +386,15 @@ export default function Speaking() {
             </Alert>
           )}
 
-          <Box sx={{ textAlign: 'center', mt: 3 }}>
+          {/* Explicit way back before the mic check and proctoring begin. */}
+          <Stack direction="row" spacing={1.5} justifyContent="center" sx={{ mt: 3 }}>
+            <Button variant="outlined" size="large" startIcon={<ArrowBackIcon />} onClick={() => navigate(hubPath)}>
+              Back
+            </Button>
             <Button variant="contained" size="large" startIcon={<MicIcon />} onClick={goMicCheck}>
               Set up microphone
             </Button>
-          </Box>
+          </Stack>
         </CardContent>
       </Card>
     );
@@ -598,10 +611,10 @@ export default function Speaking() {
         })}
 
         <Stack direction="row" spacing={1} sx={{ mt: 1, mb: 4 }}>
-          <Button variant="contained" onClick={() => navigate('/assessment')}>
+          <Button variant="contained" onClick={() => navigate(hubPath)}>
             Continue Assessment
           </Button>
-          <Button variant="text" onClick={() => navigate('/dashboard')}>
+          <Button variant="text" onClick={() => navigate(homePath)}>
             Back to Dashboard
           </Button>
         </Stack>

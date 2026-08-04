@@ -23,6 +23,11 @@ public class WritingPrompt extends BaseEntity {
     @Column(columnDefinition = "text", nullable = false)
     private String prompt;
 
+    /** Which level's bank this prompt belongs to (1 = base, 2 = advanced). */
+    @Column(nullable = false)
+    @ColumnDefault("1")
+    private int level = 1;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     @ColumnDefault("'MEDIUM'")
