@@ -17,6 +17,24 @@ ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;
 ALTER TABLE users ADD CONSTRAINT users_role_check
     CHECK (role IN ('EMPLOYEE', 'MANAGER', 'ADMIN'));
 
+-- ---------- Seed bookkeeping: run-once markers ----------
+-- This file runs on EVERY boot, so a statement that ASSERTS state will fight the User Access
+-- screen, which is now allowed to change that same state. The team placements below used to
+-- re-assert membership every start, silently undoing an admin's team change at the next
+-- restart. A "place them only if they have no team" guard cannot replace it: by the time this
+-- runs, anyone who has signed in already has Migration from AuthService, so they would never
+-- be placed at all.
+--
+-- This table gives those statements genuine run-once semantics. Not a JPA entity — nothing
+-- maps it, it exists only for this file.
+--
+-- To re-run a one-time seed (e.g. after adding new names to one of the lists below), bump its
+-- key to -v2. Prefer the User Access screen for individual moves; that is what it is for.
+CREATE TABLE IF NOT EXISTS seed_state (
+    seed_key   varchar(100) PRIMARY KEY,
+    applied_at timestamp NOT NULL DEFAULT now()
+);
+
 -- ---------- Department (single: Migration) ----------
 INSERT INTO department (created_at, updated_at, name)
 SELECT now(), now(), 'Migration'
@@ -116,13 +134,17 @@ JOIN team t ON t.name = 'PIP'
 LEFT JOIN users m ON lower(m.email) = 'abhishek.sakala@cloudfuze.com' AND m.role = 'MANAGER'
 WHERE NOT EXISTS (SELECT 1 FROM users u WHERE lower(u.email) = lower(v.email));
 
--- Ensure any of the PIP members who already exist (from a prior login) are in PIP.
+-- Place any PIP members who already existed (from a prior login) into PIP — ONCE. See the
+-- seed_state note at the top: without the marker this re-asserted the team on every boot and
+-- reverted admin team changes.
 UPDATE users SET team_id = (SELECT id FROM team WHERE name = 'PIP'), updated_at = now()
 WHERE lower(email) IN (
     'siva.kota@cloudfuze.com', 'ramana.reddy@cloudfuze.com', 'ganesh.kondameedi@cloudfuze.com',
     'pallavi.kosuvaripalli@cloudfuze.com', 'saikumar.kustapuram@cloudfuze.com', 'vineetha.yenti@cloudfuze.com',
     'dathu.kaluvala@cloudfuze.com', 'ravi.hemanth@cloudfuze.com')
-  AND team_id IS DISTINCT FROM (SELECT id FROM team WHERE name = 'PIP');
+  AND team_id IS DISTINCT FROM (SELECT id FROM team WHERE name = 'PIP')
+  AND NOT EXISTS (SELECT 1 FROM seed_state WHERE seed_key = 'team-place-pip-v1');
+INSERT INTO seed_state (seed_key) VALUES ('team-place-pip-v1') ON CONFLICT DO NOTHING;
 
 -- Test Users team members. Same pattern as PIP: create if absent, else move into Test Users.
 INSERT INTO users (created_at, updated_at, employee_id, name, email, role, department_id, team_id, manager_id)
@@ -138,11 +160,14 @@ JOIN team t ON t.name = 'Test Users'
 LEFT JOIN users m ON lower(m.email) = 'abhishek.sakala@cloudfuze.com' AND m.role = 'MANAGER'
 WHERE NOT EXISTS (SELECT 1 FROM users u WHERE lower(u.email) = lower(v.email));
 
+-- One-time placement, as with PIP above.
 UPDATE users SET team_id = (SELECT id FROM team WHERE name = 'Test Users'), updated_at = now()
 WHERE lower(email) IN (
     'kiran.ummenthala@cloudfuze.com', 'tharun.pothi@cloudfuze.com',
     'lavanya.gopasana@cloudfuze.com', 'anush.dasari@cloudfuze.com', 'joy.prakash@cloudfuze.com')
-  AND team_id IS DISTINCT FROM (SELECT id FROM team WHERE name = 'Test Users');
+  AND team_id IS DISTINCT FROM (SELECT id FROM team WHERE name = 'Test Users')
+  AND NOT EXISTS (SELECT 1 FROM seed_state WHERE seed_key = 'team-place-test-users-v1');
+INSERT INTO seed_state (seed_key) VALUES ('team-place-test-users-v1') ON CONFLICT DO NOTHING;
 
 -- Fresher team members. Same pattern as PIP: create if absent, else move into Fresher.
 -- NOTE srinidh.perla@cloudfuze.com was deliberately EXCLUDED from this list at the user's
@@ -161,12 +186,15 @@ JOIN team t ON t.name = 'Fresher'
 LEFT JOIN users m ON lower(m.email) = 'abhishek.sakala@cloudfuze.com' AND m.role = 'MANAGER'
 WHERE NOT EXISTS (SELECT 1 FROM users u WHERE lower(u.email) = lower(v.email));
 
+-- One-time placement, as with PIP above.
 UPDATE users SET team_id = (SELECT id FROM team WHERE name = 'Fresher'), updated_at = now()
 WHERE lower(email) IN (
     'venkatesh.kudukala@cloudfuze.com', 'nithish.bunne@cloudfuze.com',
     'purushotham.kurva@cloudfuze.com', 'sanjana.nerella@cloudfuze.com',
     'tanmai.arangi@cloudfuze.com', 'ambika.patil@cloudfuze.com')
-  AND team_id IS DISTINCT FROM (SELECT id FROM team WHERE name = 'Fresher');
+  AND team_id IS DISTINCT FROM (SELECT id FROM team WHERE name = 'Fresher')
+  AND NOT EXISTS (SELECT 1 FROM seed_state WHERE seed_key = 'team-place-fresher-v1');
+INSERT INTO seed_state (seed_key) VALUES ('team-place-fresher-v1') ON CONFLICT DO NOTHING;
 
 -- Default team: any existing employee not explicitly placed in PIP/Test Users/Fresher falls
 -- back to Migration (matches the "everyone else is Migration" rule; new sign-ins get this in
