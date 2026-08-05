@@ -32,6 +32,9 @@ services:
       APP_JWT_EXPIRATION_MINUTES: ${APP_JWT_EXPIRATION_MINUTES:-480}
       APP_CORS_ORIGINS: ${APP_CORS_ORIGINS:-http://localhost:5173}
       APP_DEV_LOGIN_ENABLED: ${APP_DEV_LOGIN_ENABLED:-false}
+      # Root admin list. application.yml and .env.example already expose this, but without
+      # this line it never reached the container and the hardcoded default always won.
+      APP_SUPER_ADMIN_EMAILS: ${APP_SUPER_ADMIN_EMAILS:-abhinav.surattu@cloudfuze.com}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
       OPENAI_AUDIO_MODEL: ${OPENAI_AUDIO_MODEL-gpt-4o-mini-audio-preview}
