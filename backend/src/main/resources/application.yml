@@ -43,7 +43,7 @@ app:
     client-id: ${AZURE_CLIENT_ID:}
   cors:
     allowed-origins: ${APP_CORS_ORIGINS:http://localhost:5173}
-  super-admin-emails: ${APP_SUPER_ADMIN_EMAILS:abhinav.surattu@cloudfuze.com,bhanu.srikakulam@cloudfuze.com,manmadha.jayamangala@cloudfuze.com}
+  super-admin-emails: ${APP_SUPER_ADMIN_EMAILS:abhinav.surattu@cloudfuze.com}
   openai:
     api-key: ${OPENAI_API_KEY:}
     model: ${OPENAI_MODEL:gpt-4o-mini}

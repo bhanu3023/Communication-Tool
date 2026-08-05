@@ -28,9 +28,9 @@ public class BootstrapAdminService {
         if (user == null) {
             return null;
         }
-        boolean bootstrap = adminRegistry.isBootstrapAdmin(user.getEmail())
-                || adminRegistry.isBootstrapAdmin(loginEmail);
-        if (bootstrap && user.getRole() != Role.ADMIN) {
+        boolean root = adminRegistry.isRootAdmin(user.getEmail())
+                || adminRegistry.isRootAdmin(loginEmail);
+        if (root && user.getRole() != Role.ADMIN) {
             user.setRole(Role.ADMIN);
             user.setManager(null);
             return userRepository.save(user);

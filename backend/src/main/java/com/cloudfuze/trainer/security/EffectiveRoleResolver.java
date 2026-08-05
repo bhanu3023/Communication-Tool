@@ -33,7 +33,7 @@ public class EffectiveRoleResolver {
             user = bootstrapAdminService.ensureAdmin(user);
             return user.getRole();
         }
-        if (adminRegistry.isBootstrapAdmin(jwtPrincipal.email())) {
+        if (adminRegistry.isRootAdmin(jwtPrincipal.email())) {
             return Role.ADMIN;
         }
         return jwtPrincipal.role();

@@ -141,14 +141,30 @@ public class ManagerController {
     public ManagerDtos.UserRow updateUser(@PathVariable Long id,
                                           @Valid @RequestBody ManagerDtos.UpdateUserRequest request) {
         requireSuperAdmin();
-        // Same protection as the add path: a bootstrap-list admin keeps admin rights whatever
-        // the database says, so we refuse to store a role that contradicts that.
+        // Same protection as the add path: the root admin keeps admin rights whatever the
+        // database says, so we refuse to store a role that contradicts that.
         ManagerDtos.UserRow target = managerService.allUsers().stream()
                 .filter(u -> u.id().equals(id))
                 .findFirst()
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "User not found"));
-        if (request.role() != Role.ADMIN && adminRegistry.isBootstrapAdmin(target.email())) {
-            throw new ApiException(HttpStatus.FORBIDDEN, "This administrator's role cannot be changed");
+        if (request.role() != Role.ADMIN && adminRegistry.isRootAdmin(target.email())) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "The root administrator's role cannot be changed");
+        }
+        // Removing your OWN admin access would drop you out of this screen mid-session with no
+        // way back in. The UI locks the control too; this is the gate that actually holds.
+        if (target.id().equals(currentUser.user().getId()) && request.role() != Role.ADMIN
+                && adminRegistry.isAdmin(currentUser.user())) {
+            throw new ApiException(HttpStatus.FORBIDDEN,
+                    "You cannot remove your own administrator access — ask another admin to do it");
+        }
+        // Never leave the app with nobody who can reach User Access. The root account makes this
+        // unreachable in practice, but the root list is configurable and could be emptied.
+        if (request.role() != Role.ADMIN && Role.ADMIN.name().equals(target.role())
+                && managerService.allUsers().stream()
+                        .filter(u -> Role.ADMIN.name().equals(u.role()))
+                        .count() <= 1) {
+            throw new ApiException(HttpStatus.CONFLICT,
+                    "This is the last administrator — grant someone else admin access first");
         }
         return managerService.updateUser(id, request, currentUser.user().getEmail());
     }
@@ -157,9 +173,9 @@ public class ManagerController {
     @PostMapping("/access/users")
     public ManagerDtos.AddedUser addUser(@Valid @RequestBody ManagerDtos.AddUserRequest request) {
         requireSuperAdmin();
-        // A bootstrap-list admin keeps admin rights whatever the database says, so storing a
-        // lesser role would make the row contradict their real access.
-        if (request.role() != Role.ADMIN && adminRegistry.isBootstrapAdmin(request.email())) {
+        // The root admin keeps admin rights whatever the database says, so storing a lesser role
+        // would make the row contradict their real access.
+        if (request.role() != Role.ADMIN && adminRegistry.isRootAdmin(request.email())) {
             throw new ApiException(HttpStatus.FORBIDDEN,
                     "This administrator's role cannot be changed");
         }
@@ -174,10 +190,9 @@ public class ManagerController {
                 .filter(m -> m.id().equals(id))
                 .findFirst()
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Manager not found"));
-        // An administrator's access can never be revoked (this also blocks self-revoke,
-        // since only admins reach this endpoint).
-        if (adminRegistry.isBootstrapAdmin(target.email())) {
-            throw new ApiException(HttpStatus.FORBIDDEN, "An administrator's access cannot be revoked");
+        // The root administrator's access can never be revoked.
+        if (adminRegistry.isRootAdmin(target.email())) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "The root administrator's access cannot be revoked");
         }
         return managerService.revokeManager(id);
     }

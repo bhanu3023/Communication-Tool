@@ -4,10 +4,8 @@ import com.cloudfuze.trainer.domain.Role;
 import com.cloudfuze.trainer.entity.User;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
-import org.springframework.util.StringUtils;
 
 import java.util.Arrays;
-import java.util.LinkedHashSet;
 import java.util.Locale;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -17,39 +15,34 @@ import java.util.stream.Collectors;
  *
  * Admin rights come from EITHER source:
  * <ol>
- *   <li>{@code role == ADMIN} in the database — what the User Access screen manages, and
- *       the normal way admins are granted now.</li>
- *   <li>membership of the configured bootstrap email list — a permanent safety net so a bad
- *       role edit, a wiped volume, or a botched reseed can never leave nobody able to reach
- *       the screen that fixes it.</li>
+ *   <li>{@code role == ADMIN} in the database — what the User Access screen manages, and the
+ *       normal way admins are granted and removed.</li>
+ *   <li>membership of the configured <strong>root</strong> email list — a permanent safety net
+ *       so a bad role edit, a wiped volume, or a botched reseed can never leave nobody able to
+ *       reach the screen that fixes it.</li>
  * </ol>
  *
- * Default bootstrap emails are ALWAYS included, then any {@code app.super-admin-emails}
- * entries are merged in — an empty or partial env override must never drop the built-in list.
+ * The root list is deliberately kept to <strong>one</strong> address. It used to hold all three
+ * admins, which meant no admin could ever remove another's access: the list grants admin
+ * regardless of the stored role, so the only consistent thing to do was refuse the change. With
+ * a single root, every other admin is an ordinary revocable ADMIN row, and the root account can
+ * always recover the system. {@link #isRootAdmin} exists so callers can enforce that asymmetry.
+ *
+ * This bean replaced two hand-maintained copies of the email list (one in the controller, one in
+ * the React sidebar, which had already drifted out of sync and hid the nav item from a real
+ * admin). Keep it the only place the list is read.
  */
 @Component
 public class AdminRegistry {
 
-    private static final String DEFAULT_BOOTSTRAP =
-            "abhinav.surattu@cloudfuze.com,bhanu.srikakulam@cloudfuze.com,manmadha.jayamangala@cloudfuze.com";
+    private final Set<String> rootAdminEmails;
 
-    private final Set<String> bootstrapAdminEmails;
-
-    public AdminRegistry(@Value("${app.super-admin-emails:}") String configured) {
-        Set<String> emails = new LinkedHashSet<>();
-        parseEmails(DEFAULT_BOOTSTRAP, emails);
-        if (StringUtils.hasText(configured)) {
-            parseEmails(configured, emails);
-        }
-        this.bootstrapAdminEmails = Set.copyOf(emails);
-    }
-
-    private static void parseEmails(String raw, Set<String> into) {
-        Arrays.stream(raw.split(","))
+    public AdminRegistry(@Value("${app.super-admin-emails:abhinav.surattu@cloudfuze.com}") String emails) {
+        this.rootAdminEmails = Arrays.stream(emails.split(","))
                 .map(String::trim)
                 .filter(s -> !s.isEmpty())
                 .map(s -> s.toLowerCase(Locale.ROOT))
-                .forEach(into::add);
+                .collect(Collectors.toUnmodifiableSet());
     }
 
     /** True when the user administers the app, from either source above. */
@@ -57,16 +50,14 @@ public class AdminRegistry {
         if (user == null) {
             return false;
         }
-        return user.getRole() == Role.ADMIN || isBootstrapAdmin(user.getEmail());
+        return user.getRole() == Role.ADMIN || isRootAdmin(user.getEmail());
     }
 
-    /** True for an email on the configured list — an admin who cannot be demoted away. */
-    public boolean isBootstrapAdmin(String email) {
-        return email != null && bootstrapAdminEmails.contains(email.trim().toLowerCase(Locale.ROOT));
-    }
-
-    /** For tests and diagnostics — never log in production callers. */
-    Set<String> bootstrapEmails() {
-        return bootstrapAdminEmails;
+    /**
+     * True for the root account — an admin who cannot be demoted, by anyone including
+     * themselves. Every other admin can have their access removed on the User Access screen.
+     */
+    public boolean isRootAdmin(String email) {
+        return email != null && rootAdminEmails.contains(email.trim().toLowerCase(Locale.ROOT));
     }
 }

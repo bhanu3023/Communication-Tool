@@ -17,6 +17,24 @@ ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;
 ALTER TABLE users ADD CONSTRAINT users_role_check
     CHECK (role IN ('EMPLOYEE', 'MANAGER', 'ADMIN'));
 
+-- ---------- Seed bookkeeping: run-once markers ----------
+-- This file runs on EVERY boot, so a statement that ASSERTS state will fight the User Access
+-- screen, which is now allowed to change that same state. The team placements below used to
+-- re-assert membership every start, silently undoing an admin's team change at the next
+-- restart. A "place them only if they have no team" guard cannot replace it: by the time this
+-- runs, anyone who has signed in already has Migration from AuthService, so they would never
+-- be placed at all.
+--
+-- This table gives those statements genuine run-once semantics. Not a JPA entity — nothing
+-- maps it, it exists only for this file.
+--
+-- To re-run a one-time seed (e.g. after adding new names to one of the lists below), bump its
+-- key to -v2. Prefer the User Access screen for individual moves; that is what it is for.
+CREATE TABLE IF NOT EXISTS seed_state (
+    seed_key   varchar(100) PRIMARY KEY,
+    applied_at timestamp NOT NULL DEFAULT now()
+);
+
 -- ---------- Department (single: Migration) ----------
 INSERT INTO department (created_at, updated_at, name)
 SELECT now(), now(), 'Migration'
@@ -25,8 +43,9 @@ WHERE NOT EXISTS (SELECT 1 FROM department);
 -- ---------- Teams (PIP, Migration, Test Users, Fresher) ----------
 -- Seeded per-name so new teams are added even on an already-initialised DB.
 -- Each team doubles as a filter option in the manager Team Overview, so adding a name
--- here is all it takes to add a filter. No members are seeded for Fresher — admins place
--- people into it from the User Access screen.
+-- here is all it takes to add a filter — an empty team filters to zero rows rather than
+-- erroring. Membership is seeded further down (PIP, Test Users, Fresher); anyone not placed
+-- explicitly falls back to Migration, and admins can move people from the User Access screen.
 INSERT INTO team (created_at, updated_at, name, department_id)
 SELECT now(), now(), v.name, d.id
 FROM department d
@@ -37,21 +56,22 @@ WHERE d.name = 'Migration'
 -- ---------- Managers ----------
 INSERT INTO users (created_at, updated_at, employee_id, name, email, role, department_id, team_id, manager_id)
 SELECT now(), now(), v.emp, v.name, v.email, 'MANAGER', d.id, t.id, NULL
+-- Abhinav and Bhanu are seeded by the Admins block below, not here: creating them as MANAGER
+-- first would make that block's create-if-absent skip them, leaving them short of admin on a
+-- fresh database. Only genuine managers belong in this list.
 FROM (VALUES
     ('CF-1001', 'Abhishek Sakala',  'Abhishek.Sakala@cloudfuze.com'),
-    ('CF-1009', 'Abhinav Surattu',  'Abhinav.surattu@cloudfuze.com'),
-    ('CF-1010', 'Ajay Singh',       'ajay.singh@cloudfuze.com'),
-    ('CF-1011', 'Bhanu Srikakulam', 'Bhanu.Srikakulam@cloudfuze.com')
+    ('CF-1010', 'Ajay Singh',       'ajay.singh@cloudfuze.com')
     ) AS v(emp, name, email)
 JOIN department d ON d.name = 'Migration'
 JOIN team t ON t.name = 'Migration'
 WHERE NOT EXISTS (SELECT 1 FROM users WHERE role = 'MANAGER');
 
 -- ---------- Admins ----------
--- ADMIN is a real role now (see domain/Role). These are the bootstrap admins from
--- AdminRegistry's configured list; they also keep admin rights by email whatever the stored
--- role is, so the row is kept on ADMIN to avoid contradicting their actual access.
--- Per-email idempotent: create if absent, else promote whatever role they currently hold.
+-- ADMIN is a real role now (see domain/Role). These three start as admins; only the FIRST is
+-- AdminRegistry's root account, which keeps admin rights by email whatever the stored role is.
+-- Per-email idempotent: create the row if the person does not exist yet, and nothing more —
+-- see the UPDATE below for why this must not re-promote an existing user.
 INSERT INTO users (created_at, updated_at, employee_id, name, email, role, department_id, team_id, manager_id)
 SELECT now(), now(), v.emp, v.name, v.email, 'ADMIN', d.id, t.id, NULL
 FROM department d
@@ -64,10 +84,30 @@ CROSS JOIN (VALUES
 WHERE d.name = 'Migration'
   AND NOT EXISTS (SELECT 1 FROM users u WHERE lower(u.email) = lower(v.email));
 
+-- First introduction of the ADMIN role only: grant it to the original three. The guard is
+-- "nobody is an ADMIN yet", which is true exactly once — on the deploy that first ships the
+-- role, where these people already exist as MANAGER rows and so were skipped by the INSERT
+-- above. Postgres evaluates the NOT EXISTS against the snapshot taken at statement start, so
+-- all three are promoted by this single statement rather than just the first.
+--
+-- It must NOT re-run on later boots. This statement executes on every start, and while it
+-- listed all three unconditionally it silently undid any removal of their admin access the
+-- next time the container restarted — which made "Remove admin access" a lie. Once an admin
+-- exists this is a no-op, so their role then lives purely in the database where the User
+-- Access screen can change it for good.
 UPDATE users SET role = 'ADMIN', manager_id = NULL, updated_at = now()
-WHERE lower(email) IN ('manmadha.jayamangala@cloudfuze.com',
-                       'abhinav.surattu@cloudfuze.com',
-                       'bhanu.srikakulam@cloudfuze.com')
+WHERE lower(email) IN ('abhinav.surattu@cloudfuze.com',
+                       'bhanu.srikakulam@cloudfuze.com',
+                       'manmadha.jayamangala@cloudfuze.com')
+  AND role <> 'ADMIN'
+  AND NOT EXISTS (SELECT 1 FROM users WHERE role = 'ADMIN');
+
+-- The root admin is re-asserted on EVERY boot — AdminRegistry grants them admin by email
+-- regardless of the stored role, so a row that says otherwise would contradict their real
+-- access. This runs after the bootstrap above, which would otherwise see the admin it creates
+-- and skip the other two.
+UPDATE users SET role = 'ADMIN', manager_id = NULL, updated_at = now()
+WHERE lower(email) = 'abhinav.surattu@cloudfuze.com'
   AND role <> 'ADMIN';
 
 -- ---------- Employees ----------
@@ -94,13 +134,17 @@ JOIN team t ON t.name = 'PIP'
 LEFT JOIN users m ON lower(m.email) = 'abhishek.sakala@cloudfuze.com' AND m.role = 'MANAGER'
 WHERE NOT EXISTS (SELECT 1 FROM users u WHERE lower(u.email) = lower(v.email));
 
--- Ensure any of the PIP members who already exist (from a prior login) are in PIP.
+-- Place any PIP members who already existed (from a prior login) into PIP — ONCE. See the
+-- seed_state note at the top: without the marker this re-asserted the team on every boot and
+-- reverted admin team changes.
 UPDATE users SET team_id = (SELECT id FROM team WHERE name = 'PIP'), updated_at = now()
 WHERE lower(email) IN (
     'siva.kota@cloudfuze.com', 'ramana.reddy@cloudfuze.com', 'ganesh.kondameedi@cloudfuze.com',
     'pallavi.kosuvaripalli@cloudfuze.com', 'saikumar.kustapuram@cloudfuze.com', 'vineetha.yenti@cloudfuze.com',
     'dathu.kaluvala@cloudfuze.com', 'ravi.hemanth@cloudfuze.com')
-  AND team_id IS DISTINCT FROM (SELECT id FROM team WHERE name = 'PIP');
+  AND team_id IS DISTINCT FROM (SELECT id FROM team WHERE name = 'PIP')
+  AND NOT EXISTS (SELECT 1 FROM seed_state WHERE seed_key = 'team-place-pip-v1');
+INSERT INTO seed_state (seed_key) VALUES ('team-place-pip-v1') ON CONFLICT DO NOTHING;
 
 -- Test Users team members. Same pattern as PIP: create if absent, else move into Test Users.
 INSERT INTO users (created_at, updated_at, employee_id, name, email, role, department_id, team_id, manager_id)
@@ -116,11 +160,14 @@ JOIN team t ON t.name = 'Test Users'
 LEFT JOIN users m ON lower(m.email) = 'abhishek.sakala@cloudfuze.com' AND m.role = 'MANAGER'
 WHERE NOT EXISTS (SELECT 1 FROM users u WHERE lower(u.email) = lower(v.email));
 
+-- One-time placement, as with PIP above.
 UPDATE users SET team_id = (SELECT id FROM team WHERE name = 'Test Users'), updated_at = now()
 WHERE lower(email) IN (
     'kiran.ummenthala@cloudfuze.com', 'tharun.pothi@cloudfuze.com',
     'lavanya.gopasana@cloudfuze.com', 'anush.dasari@cloudfuze.com', 'joy.prakash@cloudfuze.com')
-  AND team_id IS DISTINCT FROM (SELECT id FROM team WHERE name = 'Test Users');
+  AND team_id IS DISTINCT FROM (SELECT id FROM team WHERE name = 'Test Users')
+  AND NOT EXISTS (SELECT 1 FROM seed_state WHERE seed_key = 'team-place-test-users-v1');
+INSERT INTO seed_state (seed_key) VALUES ('team-place-test-users-v1') ON CONFLICT DO NOTHING;
 
 -- Fresher team members. Same pattern as PIP: create if absent, else move into Fresher.
 -- NOTE srinidh.perla@cloudfuze.com was deliberately EXCLUDED from this list at the user's
@@ -139,12 +186,15 @@ JOIN team t ON t.name = 'Fresher'
 LEFT JOIN users m ON lower(m.email) = 'abhishek.sakala@cloudfuze.com' AND m.role = 'MANAGER'
 WHERE NOT EXISTS (SELECT 1 FROM users u WHERE lower(u.email) = lower(v.email));
 
+-- One-time placement, as with PIP above.
 UPDATE users SET team_id = (SELECT id FROM team WHERE name = 'Fresher'), updated_at = now()
 WHERE lower(email) IN (
     'venkatesh.kudukala@cloudfuze.com', 'nithish.bunne@cloudfuze.com',
     'purushotham.kurva@cloudfuze.com', 'sanjana.nerella@cloudfuze.com',
     'tanmai.arangi@cloudfuze.com', 'ambika.patil@cloudfuze.com')
-  AND team_id IS DISTINCT FROM (SELECT id FROM team WHERE name = 'Fresher');
+  AND team_id IS DISTINCT FROM (SELECT id FROM team WHERE name = 'Fresher')
+  AND NOT EXISTS (SELECT 1 FROM seed_state WHERE seed_key = 'team-place-fresher-v1');
+INSERT INTO seed_state (seed_key) VALUES ('team-place-fresher-v1') ON CONFLICT DO NOTHING;
 
 -- Default team: any existing employee not explicitly placed in PIP/Test Users/Fresher falls
 -- back to Migration (matches the "everyone else is Migration" rule; new sign-ins get this in

@@ -32,6 +32,7 @@ import PersonOutlineIcon from '@mui/icons-material/PersonOutline';
 import PersonAddIcon from '@mui/icons-material/PersonAddAlt1';
 import SearchIcon from '@mui/icons-material/SearchOutlined';
 import CloseIcon from '@mui/icons-material/Close';
+import RemoveModeratorIcon from '@mui/icons-material/RemoveModeratorOutlined';
 import LoadingScreen from '../../components/LoadingScreen';
 import { addUser, getTeams, getUsers, updateUserAccess } from '../../services/assessmentService';
 import { useAuth } from '../../contexts/AuthContext';
@@ -119,6 +120,9 @@ export default function ManagerAccess() {
   const [savingId, setSavingId] = useState(null);
   const [justSaved, setJustSaved] = useState(null);
   const [pending, setPending] = useState(null); // a demotion awaiting confirmation
+  // An admin whose admin access is being removed, plus the role to drop them to. Unlike the
+  // dropdown's demotion, this asks WHICH role they land on rather than assuming one.
+  const [removeAdmin, setRemoveAdmin] = useState(null);
 
   // `profile.admin` is the server's verdict (role ADMIN or the bootstrap email list), so this
   // page and the backend can never disagree the way two hardcoded lists did.
@@ -276,9 +280,21 @@ export default function ManagerAccess() {
 
   /** Why this row's role cannot be edited, or '' when it can. */
   const lockReason = (u) => {
-    if (u.protectedAdmin) return 'This administrator is set in configuration and cannot be changed here.';
+    if (u.protectedAdmin) {
+      return 'This is the root administrator, set in configuration so the app can always be recovered. Their role cannot be changed.';
+    }
     if (u.id === profile?.id) return 'You cannot change your own role.';
     return '';
+  };
+
+  /** Admin access can be removed from any admin except the root account and yourself. */
+  const canRemoveAdmin = (u) => u.role === 'ADMIN' && !u.protectedAdmin && u.id !== profile?.id;
+
+  const confirmRemoveAdmin = async () => {
+    const { user, role } = removeAdmin;
+    setRemoveAdmin(null);
+    // Team omitted — removing admin access must not disturb where they sit in the org.
+    await save(user, role, '');
   };
 
   const clearFilters = () => {
@@ -390,7 +406,7 @@ export default function ManagerAccess() {
                 <Typography variant="caption" color="text.secondary" sx={{ width: 160 }}>
                   Team
                 </Typography>
-                <Box sx={{ width: 24 }} />
+                <Box sx={{ width: 44 }} />
               </Stack>
               <Divider />
             </>
@@ -518,10 +534,30 @@ export default function ManagerAccess() {
                       </Select>
                     </Box>
 
-                    <Box sx={{ width: 24, display: 'flex', justifyContent: 'center' }}>
-                      <Fade in={busy} unmountOnExit>
-                        <CircularProgress size={18} />
-                      </Fade>
+                    <Box
+                      sx={{
+                        width: { xs: '100%', md: 44 },
+                        display: 'flex',
+                        justifyContent: { xs: 'flex-start', md: 'center' },
+                        alignItems: 'center',
+                      }}
+                    >
+                      {busy ? (
+                        <Fade in>
+                          <CircularProgress size={18} />
+                        </Fade>
+                      ) : canRemoveAdmin(u) ? (
+                        <Tooltip title={`Remove admin access from ${u.name}`}>
+                          <IconButton
+                            size="small"
+                            color="error"
+                            aria-label={`Remove admin access from ${u.name}`}
+                            onClick={() => setRemoveAdmin({ user: u, role: 'MANAGER' })}
+                          >
+                            <RemoveModeratorIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      ) : null}
                     </Box>
                   </Stack>
                 </Box>
@@ -599,6 +635,47 @@ export default function ManagerAccess() {
             startIcon={submitting ? <CircularProgress size={16} color="inherit" /> : <PersonAddIcon />}
           >
             Add user
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Remove admin access — asks what they become, since "not an admin" is two things. */}
+      <Dialog open={!!removeAdmin} onClose={() => setRemoveAdmin(null)} maxWidth="xs" fullWidth>
+        <DialogTitle>Remove admin access?</DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={{ mb: 2 }}>
+            {removeAdmin && (
+              <>
+                <strong>{removeAdmin.user.name}</strong> will lose the User Access screen and can
+                no longer change anyone's role. Their team and assessment data are untouched, and
+                you can make them an admin again at any time. They keep admin access in their
+                current session until they next sign in.
+              </>
+            )}
+          </DialogContentText>
+          <Typography variant="subtitle2" sx={{ mb: 1 }}>
+            What should they become?
+          </Typography>
+          <Select
+            fullWidth
+            size="small"
+            value={removeAdmin?.role || 'MANAGER'}
+            aria-label="Role after removing admin access"
+            onChange={(e) => setRemoveAdmin((cur) => ({ ...cur, role: e.target.value }))}
+          >
+            <MenuItem value="MANAGER">Manager — keeps team oversight</MenuItem>
+            <MenuItem value="EMPLOYEE">Employee — loses team oversight too</MenuItem>
+          </Select>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button onClick={() => setRemoveAdmin(null)}>Cancel</Button>
+          <Button
+            variant="contained"
+            color="error"
+            startIcon={<RemoveModeratorIcon />}
+            onClick={confirmRemoveAdmin}
+          >
+            Remove admin access
           </Button>
         </DialogActions>
       </Dialog>

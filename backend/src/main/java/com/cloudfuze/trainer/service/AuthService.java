@@ -59,7 +59,7 @@ public class AuthService {
         // Provision on first login; keep seeded org data (department/team/role/manager) intact.
         if (user == null) {
             User u = new User();
-            u.setRole(adminRegistry.isBootstrapAdmin(email) ? Role.ADMIN : Role.EMPLOYEE);
+            u.setRole(adminRegistry.isRootAdmin(email) ? Role.ADMIN : Role.EMPLOYEE);
             u.setEmployeeId("CF-" + Math.abs((oid == null ? email : oid).hashCode() % 100000));
             // New sign-ins default to the Migration team. PIP/Test members are pre-seeded
             // (data.sql) and take the resolveUser branch above, so they keep their team.
@@ -84,7 +84,7 @@ public class AuthService {
 
     private User resolveUser(String oid, String email) {
         // Bootstrap admins: always match the canonical row by email so promotion is reliable.
-        if (email != null && adminRegistry.isBootstrapAdmin(email)) {
+        if (email != null && adminRegistry.isRootAdmin(email)) {
             var byEmail = userRepository.findByEmailIgnoreCase(email);
             if (byEmail.isPresent()) {
                 User u = byEmail.get();
