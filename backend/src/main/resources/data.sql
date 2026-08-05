@@ -25,8 +25,9 @@ WHERE NOT EXISTS (SELECT 1 FROM department);
 -- ---------- Teams (PIP, Migration, Test Users, Fresher) ----------
 -- Seeded per-name so new teams are added even on an already-initialised DB.
 -- Each team doubles as a filter option in the manager Team Overview, so adding a name
--- here is all it takes to add a filter. No members are seeded for Fresher — admins place
--- people into it from the User Access screen.
+-- here is all it takes to add a filter — an empty team filters to zero rows rather than
+-- erroring. Membership is seeded further down (PIP, Test Users, Fresher); anyone not placed
+-- explicitly falls back to Migration, and admins can move people from the User Access screen.
 INSERT INTO team (created_at, updated_at, name, department_id)
 SELECT now(), now(), v.name, d.id
 FROM department d
