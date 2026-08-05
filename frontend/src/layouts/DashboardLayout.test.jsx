@@ -63,4 +63,16 @@ describe('DashboardLayout sidebar', () => {
     expect(screen.queryAllByText('My Dashboard').length).toBeGreaterThan(0);
     expect(screen.queryAllByText('User Access').length).toBeGreaterThan(0);
   });
+
+  it("separates an admin's own pages from the administration ones under headings", () => {
+    renderLayout({ role: 'ADMIN', admin: true, nav: EMPLOYEE_NAV, adminNav: MANAGER_NAV });
+    expect(screen.queryAllByText('Menu').length).toBeGreaterThan(0);
+    expect(screen.queryAllByText('Administration').length).toBeGreaterThan(0);
+  });
+
+  it('shows a single group with no Administration heading for a non-admin', () => {
+    renderLayout({ role: 'EMPLOYEE', admin: false, nav: EMPLOYEE_NAV, adminNav: MANAGER_NAV });
+    expect(screen.queryAllByText('Menu').length).toBeGreaterThan(0);
+    expect(screen.queryAllByText('Administration')).toHaveLength(0);
+  });
 });
