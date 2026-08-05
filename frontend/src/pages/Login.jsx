@@ -6,6 +6,7 @@ import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { homeForRole } from '../utils/auth';
+import BrandLogo from '../components/BrandLogo';
 
 /** Authentic four-square Microsoft logo (per Microsoft brand guidelines). */
 function MicrosoftLogo({ size = 18 }) {
