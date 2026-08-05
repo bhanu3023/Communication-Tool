@@ -319,7 +319,7 @@ export default function ManagerAccess() {
           </Stack>
           <Typography variant="body2" color="text.secondary">
             Add people and set who is an employee, manager or admin. Role changes take effect
-            the next time they sign in.
+            straight away — they do not need to sign in again.
           </Typography>
         </Box>
         <Button
@@ -648,8 +648,8 @@ export default function ManagerAccess() {
               <>
                 <strong>{removeAdmin.user.name}</strong> will lose the User Access screen and can
                 no longer change anyone's role. Their team and assessment data are untouched, and
-                you can make them an admin again at any time. They keep admin access in their
-                current session until they next sign in.
+                you can make them an admin again at any time. This takes effect immediately, even
+                if they are signed in right now.
               </>
             )}
           </DialogContentText>
@@ -690,7 +690,7 @@ export default function ManagerAccess() {
                 <strong>{pending.user.name}</strong> will lose{' '}
                 {pending.user.role === 'ADMIN' ? 'administrator' : 'manager'} access and become a
                 regular employee. Their assessment data is kept, and you can change this back at
-                any time. They keep their current access until they next sign in.
+                any time. This takes effect immediately, even if they are signed in right now.
               </>
             )}
           </DialogContentText>
