@@ -74,32 +74,11 @@ export const LOCKED_THEME = {
 
 export const levelTheme = (level) => LEVEL_THEME[level] || LEVEL_THEME[1];
 
-/** Registered levels for UI toggles — add entries to LEVEL_THEME when new levels ship. */
-export const levelCatalog = () =>
-  Object.entries(LEVEL_THEME)
-    .map(([n, t]) => ({
-      n: Number(n),
-      label: t.label,
-      shortLabel: t.label.replace('Level ', 'L'),
-      tagline: t.tagline,
-    }))
-    .sort((a, b) => a.n - b.n);
-
-/** Level portals — used by in-page navigation (Test page level toggles). */
+/** The two level portals, for the hero pills and the sidebar. */
 export const LEVELS_NAV = [
-  { n: 1, label: 'Level 1', path: '/test?level=1' },
-  { n: 2, label: 'Level 2', path: '/test?level=2' },
+  { n: 1, label: 'Level 1', path: '/dashboard' },
+  { n: 2, label: 'Level 2', path: '/level-2' },
 ];
-
-/** Hint shown when a level is still locked (e.g. "Complete Level 1 to unlock"). */
-export const levelUnlockHint = (level) => {
-  if (level <= 1) return '';
-  const prev = levelCatalog().find((l) => l.n === level - 1);
-  return `Complete ${prev?.label ?? `Level ${level - 1}`} to unlock`;
-};
-
-/** Employee test hub with optional level query. */
-export const testPath = (level = 1) => `/test?level=${level}`;
 
 export const sectionTitle = (code) => code.charAt(0) + code.slice(1).toLowerCase();
 

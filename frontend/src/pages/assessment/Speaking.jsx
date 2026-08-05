@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Alert,
@@ -38,7 +38,6 @@ import { useAudioRecorder } from '../../hooks/useAudioRecorder';
 import { useExamMode } from '../../hooks/useExamMode';
 import { recordViolation, startSpeaking, submitSpeaking } from '../../services/assessmentService';
 import { useToast } from '../../contexts/ToastContext';
-import { levelRules, testPath } from '../../utils/levels';
 
 // Recording PLAYBACK on the results screen is temporarily disabled (per request).
 // The audio is still recorded and sent to the backend so the ACTUAL voice is evaluated
@@ -62,8 +61,8 @@ export default function Speaking() {
   const [searchParams] = useSearchParams();
   const level = Number(searchParams.get('level')) === 2 ? 2 : 1;
   // Every exit from a Level 2 test returns to the Level 2 portal, never to Level 1.
-  const homePath = '/dashboard';
-  const hubPath = testPath(level);
+  const homePath = level === 2 ? '/level-2' : '/dashboard';
+  const hubPath = level === 2 ? '/level-2' : '/assessment';
   const { showToast } = useToast();
   const { supported, transcript, error: speechError, start: startMic, stop: stopMic, setTranscript } =
     useSpeechRecognition();
@@ -93,37 +92,6 @@ export default function Speaking() {
   const sentences = data?.sentences || [];
   const current = sentences[index];
   const recordCount = current ? recordCounts[current.id] || 0 : 0;
-  const passMark = levelRules(level).passMark;
-  const resultItems = phase === 'result' && result ? result.details?.items || [] : [];
-
-  const RESULT_DIMENSIONS = useMemo(
-    () => [
-      ['Pronunciation', 'pronunciation'],
-      ['Fluency', 'fluency'],
-      ['Accuracy', 'accuracy'],
-      ['Grammar', 'grammar'],
-      ['Vocabulary', 'vocabulary'],
-      ['Confidence', 'confidence'],
-    ],
-    [],
-  );
-
-  const resultWeakest = useMemo(() => {
-    const items = resultItems;
-    const dimAvg = (key) =>
-      items.length ? items.reduce((s, it) => s + (it.evaluation?.[key] ?? 0), 0) / items.length : 0;
-    return RESULT_DIMENSIONS.map(([label, key]) => ({ label, val: dimAvg(key) }))
-      .sort((a, b) => a.val - b.val)
-      .slice(0, 2)
-      .filter((w) => w.val < 85);
-  }, [resultItems, RESULT_DIMENSIONS]);
-
-  const resultMissedCount = useMemo(
-    () => resultItems.filter((it) => !(it.transcript || '').trim()).length,
-    [resultItems],
-  );
-
-  const resultScoreColor = useCallback((v) => (v >= passMark ? 'success' : 'error'), [passMark]);
 
   // Start (or re-start) capturing. Allowed up to MAX_RECORDINGS times per sentence.
   const startRecording = () => {
@@ -495,7 +463,25 @@ export default function Speaking() {
   }
 
   if (phase === 'result' && result) {
-    const items = resultItems;
+    const items = result.details?.items || [];
+    const scoreColor = (v) => (v >= 75 ? 'success' : 'error'); // pass mark 75: green/red only
+    const DIMENSIONS = [
+      ['Pronunciation', 'pronunciation'],
+      ['Fluency', 'fluency'],
+      ['Accuracy', 'accuracy'],
+      ['Grammar', 'grammar'],
+      ['Vocabulary', 'vocabulary'],
+      ['Confidence', 'confidence'],
+    ];
+    // Average each dimension across all sentences to find where to focus.
+    const dimAvg = (key) =>
+      items.length ? items.reduce((s, it) => s + (it.evaluation?.[key] ?? 0), 0) / items.length : 0;
+    const weakest = DIMENSIONS.map(([label, key]) => ({ label, val: dimAvg(key) }))
+      .sort((a, b) => a.val - b.val)
+      .slice(0, 2)
+      .filter((w) => w.val < 85);
+    const missedCount = items.filter((it) => !(it.transcript || '').trim()).length;
+
     return (
       <Box sx={{ maxWidth: 780, mx: 'auto' }}>
         <Card sx={{ mb: 2 }}>
@@ -507,32 +493,32 @@ export default function Speaking() {
               <ScoreGauge score={result.score} label="Speaking Score" />
             </Box>
             <Chip
-              color={result.score >= passMark ? 'success' : 'error'}
-              label={result.score >= passMark ? `Passed ✓ (pass mark ${passMark})` : `Below the ${passMark} pass mark`}
+              color={result.score >= 75 ? 'success' : 'error'}
+              label={result.score >= 75 ? 'Passed ✓ (pass mark 75)' : 'Below the 75 pass mark'}
               sx={{ mb: 1, fontWeight: 700 }}
             />
 
             {/* Where to focus */}
-            {(resultWeakest.length > 0 || resultMissedCount > 0) && (
+            {(weakest.length > 0 || missedCount > 0) && (
               <Box sx={{ textAlign: 'left', mt: 2 }}>
                 <Divider sx={{ mb: 2 }} />
                 <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>
                   Where to improve
                 </Typography>
-                {resultWeakest.length > 0 && (
+                {weakest.length > 0 && (
                   <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mb: 1 }}>
                     <Typography variant="body2" color="text.secondary" sx={{ mr: 0.5 }}>
                       Focus most on:
                     </Typography>
-                    {resultWeakest.map((w) => (
-                      <Chip key={w.label} size="small" color={resultScoreColor(w.val)}
+                    {weakest.map((w) => (
+                      <Chip key={w.label} size="small" color={scoreColor(w.val)}
                         label={`${w.label} (${Math.round(w.val)})`} />
                     ))}
                   </Stack>
                 )}
-                {resultMissedCount > 0 && (
+                {missedCount > 0 && (
                   <Typography variant="body2" color="error.main">
-                    {resultMissedCount} sentence{resultMissedCount > 1 ? 's' : ''} had no speech detected — make sure
+                    {missedCount} sentence{missedCount > 1 ? 's' : ''} had no speech detected — make sure
                     you press <strong>Record</strong> and speak clearly for each one.
                   </Typography>
                 )}
@@ -557,7 +543,7 @@ export default function Speaking() {
                   <Typography variant="subtitle2" color="text.secondary">
                     Sentence {i + 1}
                   </Typography>
-                  <Chip size="small" color={resultScoreColor(ev.overall ?? 0)}
+                  <Chip size="small" color={scoreColor(ev.overall ?? 0)}
                     label={`${Math.round(ev.overall ?? 0)} / 100`} />
                 </Stack>
 
@@ -599,8 +585,8 @@ export default function Speaking() {
                 })()}
 
                 <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mb: ev.suggestions?.length ? 2 : 0 }}>
-                  {RESULT_DIMENSIONS.map(([label, key]) => (
-                    <Chip key={key} size="small" variant="outlined" color={resultScoreColor(ev[key] ?? 0)}
+                  {DIMENSIONS.map(([label, key]) => (
+                    <Chip key={key} size="small" variant="outlined" color={scoreColor(ev[key] ?? 0)}
                       label={`${label} ${Math.round(ev[key] ?? 0)}`} />
                   ))}
                 </Stack>

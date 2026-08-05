@@ -1,5 +1,4 @@
 import {
-  Button,
   Card,
   CardContent,
   Chip,
@@ -13,7 +12,6 @@ import {
   TableRow,
   Typography,
 } from '@mui/material';
-import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import HistoryIcon from '@mui/icons-material/History';
 import { scoreColor } from '../utils/format';
 import { levelTheme, sectionTitle } from '../utils/levels';
@@ -23,17 +21,15 @@ import { Improvement } from './SectionTile';
  * Attempt history for one level. Shared so both level pages end with the same block;
  * only the accent and the empty-state copy differ.
  */
-export default function AttemptHistoryTable({ rows = [], level = 1, showLevelBadge = true, onTestClick }) {
+export default function AttemptHistoryTable({ rows = [], level = 1, emptyMessage }) {
   const t = levelTheme(level);
   return (
     <Card>
       <CardContent>
         <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1 }}>
           <HistoryIcon sx={{ color: t.accent }} />
-          <Typography variant="h6">Recent attempts</Typography>
-          {showLevelBadge && (
-            <Chip size="small" label={t.label} sx={{ bgcolor: `${t.accent}14`, color: t.accent, fontWeight: 600 }} />
-          )}
+          <Typography variant="h6">Attempt History</Typography>
+          <Chip size="small" label={t.label} sx={{ bgcolor: `${t.accent}14`, color: t.accent, fontWeight: 600 }} />
         </Stack>
         <Divider sx={{ mb: 1 }} />
         <TableContainer sx={{ maxHeight: 420 }}>
@@ -51,14 +47,7 @@ export default function AttemptHistoryTable({ rows = [], level = 1, showLevelBad
               {rows.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={5} align="center" sx={{ py: 4, color: 'text.secondary' }}>
-                    <Stack spacing={1.5} alignItems="center">
-                      <Typography variant="body2">No attempts yet.</Typography>
-                      {onTestClick && (
-                        <Button variant="contained" endIcon={<ArrowForwardIcon />} onClick={onTestClick}>
-                          Go to Test
-                        </Button>
-                      )}
-                    </Stack>
+                    {emptyMessage}
                   </TableCell>
                 </TableRow>
               )}

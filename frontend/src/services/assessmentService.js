@@ -52,6 +52,7 @@ export const grantAttempt = (id, section, level = 1) =>
   api.post(`/manager/employee/${id}/grant-attempt`, null, { params: { section, level } }).then((r) => r.data);
 
 // --- User Access (admin only) ---
+export const getManagers = () => api.get('/manager/access/managers').then((r) => r.data);
 // Adds a user with a role and team, or re-assigns one who already exists. `team` may be a
 // brand-new name — the backend creates it. Admin only (enforced server-side).
 export const addUser = ({ email, name, role, team }) =>
@@ -61,3 +62,7 @@ export const getUsers = () => api.get('/manager/access/users').then((r) => r.dat
 // Changes an existing user's role and/or team.
 export const updateUserAccess = (id, { role, team }) =>
   api.put(`/manager/access/users/${id}`, { role, team }).then((r) => r.data);
+export const grantManagerAccess = (email) =>
+  api.post('/manager/access/grant', { email }).then((r) => r.data);
+export const revokeManagerAccess = (id) =>
+  api.delete(`/manager/access/managers/${id}`).then((r) => r.data);

@@ -26,4 +26,3 @@ Thumbs.db
 
 # Filled-in production env (secrets) — never commit
 .env.production
-.gstack/

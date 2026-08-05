@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Avatar,
@@ -46,66 +46,42 @@ export default function ManagerDashboard() {
 
   // Scores are fetched per level: Level 1 and Level 2 have different pass marks and
   // attempt allowances, so they are never mixed into one row.
-  useEffect(() => {
-    let active = true;
-    const t = setTimeout(() => {
-      setLoading(true);
-      getTeam({ search: search || undefined, team: team || undefined, level })
-        .then((r) => {
-          if (active) setRows(r);
-        })
-        .catch(() => {
-          if (active) showToast('Failed to load team', 'error');
-        })
-        .finally(() => {
-          if (active) setLoading(false);
-        });
-    }, 300);
-    return () => {
-      active = false;
-      clearTimeout(t);
-    };
+  const load = useCallback(() => {
+    setLoading(true);
+    getTeam({ search: search || undefined, team: team || undefined, level })
+      .then(setRows)
+      .catch(() => showToast('Failed to load team', 'error'))
+      .finally(() => setLoading(false));
   }, [search, team, level, showToast]);
 
   useEffect(() => {
-    let active = true;
+    const t = setTimeout(load, 300); // debounce search
+    return () => clearTimeout(t);
+  }, [load]);
+
+  useEffect(() => {
     getTeams()
-      .then((t) => {
-        if (active) setTeams(t);
-      })
-      .catch(() => {});
-    return () => {
-      active = false;
-    };
+      .then(setTeams)
+      .catch(() => {}); // filter is optional — silently degrade if teams can't load
   }, []);
 
   const open = (id) => navigate(`/manager/employee/${id}?level=${level}`);
   const accent = levelTheme(level).accent;
 
-  const hasAttempted = useCallback(
-    (r) => (r.listeningAttempts || 0) + (r.speakingAttempts || 0) + (r.writingAttempts || 0) > 0,
-    [],
-  );
+  const hasAttempted = (r) =>
+    (r.listeningAttempts || 0) + (r.speakingAttempts || 0) + (r.writingAttempts || 0) > 0;
 
-  const counts = useMemo(
-    () => ({
-      all: rows.length,
-      attempted: rows.filter(hasAttempted).length,
-      not_attempted: rows.filter((r) => !hasAttempted(r)).length,
-    }),
-    [rows, hasAttempted],
-  );
+  const counts = {
+    all: rows.length,
+    attempted: rows.filter(hasAttempted).length,
+    not_attempted: rows.filter((r) => !hasAttempted(r)).length,
+  };
 
-  const filteredRows = useMemo(() => {
-    if (status === 'attempted') return rows.filter(hasAttempted);
-    if (status === 'not_attempted') return rows.filter((r) => !hasAttempted(r));
-    return rows;
-  }, [rows, status, hasAttempted]);
-
-  const level2UnlockedCount = useMemo(
-    () => rows.filter((r) => r.level2Unlocked).length,
-    [rows],
-  );
+  const filteredRows = rows.filter((r) => {
+    if (status === 'attempted') return hasAttempted(r);
+    if (status === 'not_attempted') return !hasAttempted(r);
+    return true;
+  });
 
   const statusFilters = [
     { key: 'all', label: 'All' },
@@ -129,7 +105,7 @@ export default function ManagerDashboard() {
         {level === 2 && (
           <Chip
             size="small"
-            label={`${level2UnlockedCount} of ${rows.length} unlocked Level 2`}
+            label={`${rows.filter((r) => r.level2Unlocked).length} of ${rows.length} unlocked Level 2`}
             sx={{ bgcolor: `${accent}14`, color: accent, fontWeight: 600 }}
           />
         )}

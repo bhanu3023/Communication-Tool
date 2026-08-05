@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Box, Chip, Fade, Grid, LinearProgress, Paper, Stack, Typography } from '@mui/material';
 import RocketLaunchIcon from '@mui/icons-material/RocketLaunch';
@@ -39,26 +39,21 @@ export default function Level2() {
   const { showToast } = useToast();
   const t = levelTheme(LEVEL);
 
+  const load = useCallback(
+    () =>
+      Promise.all([getSections(LEVEL), getSections(1), getHistory(LEVEL)])
+        .then(([l2, l1, hist]) => {
+          setCards(l2);
+          setLevel1Cards(l1);
+          setHistory(hist || []);
+        })
+        .catch(() => showToast('Could not load Level 2', 'error')),
+    [showToast],
+  );
+
   useEffect(() => {
-    let active = true;
-    setLoading(true);
-    Promise.all([getSections(LEVEL), getSections(1), getHistory(LEVEL)])
-      .then(([l2, l1, hist]) => {
-        if (!active) return;
-        setCards(l2);
-        setLevel1Cards(l1);
-        setHistory(hist || []);
-      })
-      .catch(() => {
-        if (active) showToast('Could not load Level 2', 'error');
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
-    return () => {
-      active = false;
-    };
-  }, [showToast]);
+    load().finally(() => setLoading(false));
+  }, [load]);
 
   // The gate is reported by the backend on every Level 2 card.
   const unlocked = !!cards && cards.every((c) => c.levelUnlocked);

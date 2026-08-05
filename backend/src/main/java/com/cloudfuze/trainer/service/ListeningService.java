@@ -13,13 +13,11 @@ import com.cloudfuze.trainer.service.ai.ListeningSummary;
 import com.cloudfuze.trainer.util.JsonUtil;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionTemplate;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 @Service
 public class ListeningService {
@@ -42,19 +40,16 @@ public class ListeningService {
     private final AiService aiService;
     private final JsonUtil json;
     private final AuditService auditService;
-    private final TransactionTemplate transactionTemplate;
 
     public ListeningService(ContentService contentService, SessionService sessionService,
                             ListeningQuestionRepository questionRepository, AiService aiService,
-                            JsonUtil json, AuditService auditService,
-                            org.springframework.transaction.PlatformTransactionManager transactionManager) {
+                            JsonUtil json, AuditService auditService) {
         this.contentService = contentService;
         this.sessionService = sessionService;
         this.questionRepository = questionRepository;
         this.aiService = aiService;
         this.json = json;
         this.auditService = auditService;
-        this.transactionTemplate = new TransactionTemplate(transactionManager);
     }
 
     @Transactional
@@ -84,19 +79,14 @@ public class ListeningService {
         return Math.max(MIN_AUDIO_SECONDS, Math.min(MAX_AUDIO_SECONDS, estimate));
     }
 
+    @Transactional
     public SectionScoreResponse submit(User user, ListeningDtos.SubmitRequest request) {
         AssessmentSession session = sessionService.requireOwnedActiveSession(user, request.sessionId());
-        Long sessionId = session.getId();
-
-        Map<Long, ListeningQuestion> questionsById = questionRepository
-                .findAllById(request.answers().stream().map(ListeningDtos.AnswerSubmission::questionId).toList())
-                .stream()
-                .collect(Collectors.toMap(ListeningQuestion::getId, q -> q));
 
         List<ListeningDtos.AnswerResult> results = new ArrayList<>();
         int correct = 0;
         for (ListeningDtos.AnswerSubmission answer : request.answers()) {
-            ListeningQuestion q = questionsById.get(answer.questionId());
+            ListeningQuestion q = questionRepository.findById(answer.questionId()).orElse(null);
             if (q == null) continue;
             boolean isCorrect = q.getCorrectOption().equalsIgnoreCase(answer.selectedOption());
             if (isCorrect) correct++;
@@ -114,12 +104,10 @@ public class ListeningService {
         details.put("answers", results);
         details.put("summary", summary);
 
-        return transactionTemplate.execute(status -> {
-            AssessmentSession active = sessionService.requireOwnedActiveSession(user, sessionId);
-            sessionService.completeSection(
-                    active, Section.LISTENING, score, json.toJson(details), json.toJson(summary));
-            auditService.log(user.getEmail(), "LISTENING_SUBMIT", "session=" + sessionId + " score=" + score);
-            return new SectionScoreResponse("LISTENING", score, true, null, summary, details);
-        });
+        sessionService.completeSection(
+                session, Section.LISTENING, score, json.toJson(details), json.toJson(summary));
+        auditService.log(user.getEmail(), "LISTENING_SUBMIT", "session=" + session.getId() + " score=" + score);
+
+        return new SectionScoreResponse("LISTENING", score, true, null, summary, details);
     }
 }

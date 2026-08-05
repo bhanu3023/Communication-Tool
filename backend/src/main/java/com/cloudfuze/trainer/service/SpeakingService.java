@@ -15,14 +15,12 @@ import com.cloudfuze.trainer.service.ai.SpeechAssessment;
 import com.cloudfuze.trainer.util.JsonUtil;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionTemplate;
 
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 @Service
 public class SpeakingService {
@@ -39,15 +37,13 @@ public class SpeakingService {
     private final com.cloudfuze.trainer.repository.SpeakingRecordingRepository recordingRepository;
     private final com.cloudfuze.trainer.repository.AssessmentSessionRepository sessionRepository;
     private final SpeakingSentenceRepository sentenceRepository;
-    private final TransactionTemplate transactionTemplate;
 
     public SpeakingService(SpeakingSetService speakingSetService, SessionService sessionService,
                            AiService aiService, AzureSpeechService azureSpeechService,
                            JsonUtil json, AuditService auditService,
                            com.cloudfuze.trainer.repository.SpeakingRecordingRepository recordingRepository,
                            com.cloudfuze.trainer.repository.AssessmentSessionRepository sessionRepository,
-                           SpeakingSentenceRepository sentenceRepository,
-                           org.springframework.transaction.PlatformTransactionManager transactionManager) {
+                           SpeakingSentenceRepository sentenceRepository) {
         this.speakingSetService = speakingSetService;
         this.sessionService = sessionService;
         this.aiService = aiService;
@@ -57,11 +53,16 @@ public class SpeakingService {
         this.recordingRepository = recordingRepository;
         this.sessionRepository = sessionRepository;
         this.sentenceRepository = sentenceRepository;
-        this.transactionTemplate = new TransactionTemplate(transactionManager);
     }
 
     /** Scores one spoken sentence via Azure → OpenAI-audio → transcript fallback. */
-    private SpeakingDtos.SpeechItem scoreSentence(String expected, SpeakingDtos.SpeechResultInput input) {
+    private SpeakingDtos.SpeechItem scoreSentence(SpeakingDtos.SpeechResultInput input) {
+        // Never trust the client's "expected" text — resolve the reference sentence from
+        // the database by id, so a caller can't send expected == transcript for a perfect
+        // score. The transcript is still client-supplied, but it is what gets graded.
+        String expected = sentenceRepository.findById(input.sentenceId())
+                .map(SpeakingSentence::getText)
+                .orElse("");
         String transcript = input.transcript() == null ? "" : input.transcript();
         SpeakingEvaluation eval = null;
 
@@ -139,24 +140,20 @@ public class SpeakingService {
                 session.getId(), session.getAttemptNumber(), OVERALL_SECONDS, QUESTION_SECONDS, views);
     }
 
+    @Transactional
     public SectionScoreResponse submit(User user, SpeakingDtos.SubmitRequest request) {
         AssessmentSession session = sessionService.requireOwnedActiveSession(user, request.sessionId());
-        Long sessionId = session.getId();
 
-        // Resolve reference sentences in one query before the (slow) AI scoring pass.
-        Map<Long, String> expectedById = sentenceRepository
-                .findAllById(request.results().stream().map(SpeakingDtos.SpeechResultInput::sentenceId).toList())
-                .stream()
-                .collect(Collectors.toMap(SpeakingSentence::getId, SpeakingSentence::getText));
-
-        // AI / Azure calls run outside a DB transaction so the connection is not held open.
+        // Score each sentence sequentially (avoids OpenAI concurrency issues) and persist
+        // its audio so it can be replayed later from the dashboard / manager portal.
         List<SpeakingDtos.SpeechItem> items = new ArrayList<>();
+        int index = 0;
         for (SpeakingDtos.SpeechResultInput input : request.results()) {
-            String expected = expectedById.getOrDefault(input.sentenceId(), "");
-            SpeakingDtos.SpeechItem scored = scoreSentence(expected, input);
-            boolean hasAudio = decodeAudio(input.audioBase64()) != null;
+            SpeakingDtos.SpeechItem scored = scoreSentence(input);
+            boolean hasAudio = storeRecording(session.getId(), index, input.audioBase64());
             items.add(new SpeakingDtos.SpeechItem(
                     scored.expected(), scored.transcript(), scored.evaluation(), hasAudio));
+            index++;
         }
         double total = items.stream().mapToDouble(it -> it.evaluation().overall()).sum();
         double score = items.isEmpty() ? 0 : Math.round((total / items.size()) * 10.0) / 10.0;
@@ -165,17 +162,11 @@ public class SpeakingService {
         details.put("items", items);
         details.put("average", score);
 
-        return transactionTemplate.execute(status -> {
-            AssessmentSession active = sessionService.requireOwnedActiveSession(user, sessionId);
-            int index = 0;
-            for (SpeakingDtos.SpeechResultInput input : request.results()) {
-                storeRecording(sessionId, index++, input.audioBase64());
-            }
-            sessionService.completeSection(
-                    active, Section.SPEAKING, score, json.toJson(details), json.toJson(details));
-            auditService.log(user.getEmail(), "SPEAKING_SUBMIT", "session=" + sessionId + " score=" + score);
-            return new SectionScoreResponse("SPEAKING", score, true, null, details, details);
-        });
+        sessionService.completeSection(
+                session, Section.SPEAKING, score, json.toJson(details), json.toJson(details));
+        auditService.log(user.getEmail(), "SPEAKING_SUBMIT", "session=" + session.getId() + " score=" + score);
+
+        return new SectionScoreResponse("SPEAKING", score, true, null, details, details);
     }
 
     /** Strips an optional data-URL prefix and returns the raw base64 payload. */

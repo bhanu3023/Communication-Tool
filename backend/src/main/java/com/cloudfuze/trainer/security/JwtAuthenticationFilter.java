@@ -21,11 +21,9 @@ import java.util.List;
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtService jwtService;
-    private final EffectiveRoleResolver effectiveRoleResolver;
 
-    public JwtAuthenticationFilter(JwtService jwtService, EffectiveRoleResolver effectiveRoleResolver) {
+    public JwtAuthenticationFilter(JwtService jwtService) {
         this.jwtService = jwtService;
-        this.effectiveRoleResolver = effectiveRoleResolver;
     }
 
     @Override
@@ -36,11 +34,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         if (StringUtils.hasText(header) && header.startsWith("Bearer ")) {
             String token = header.substring(7);
             try {
-                AppPrincipal parsed = jwtService.parse(token);
-                var role = effectiveRoleResolver.resolve(parsed);
-                AppPrincipal principal = new AppPrincipal(
-                        parsed.userId(), parsed.email(), parsed.name(), role);
-                var authority = new SimpleGrantedAuthority("ROLE_" + role.name());
+                AppPrincipal principal = jwtService.parse(token);
+                var authority = new SimpleGrantedAuthority("ROLE_" + principal.role().name());
                 var auth = new UsernamePasswordAuthenticationToken(principal, null, List.of(authority));
                 auth.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
                 SecurityContextHolder.getContext().setAuthentication(auth);

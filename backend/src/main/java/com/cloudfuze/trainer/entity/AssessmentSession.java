@@ -7,7 +7,6 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
-import jakarta.persistence.Index;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import lombok.Getter;
@@ -24,11 +23,7 @@ import java.time.Instant;
 @Getter
 @Setter
 @Entity
-@Table(name = "assessment_session", indexes = {
-        @Index(name = "idx_assessment_session_user_section_level_status",
-                columnList = "user_id, section, level, status"),
-        @Index(name = "idx_assessment_session_created_at", columnList = "created_at")
-})
+@Table(name = "assessment_session")
 public class AssessmentSession extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
