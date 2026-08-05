@@ -29,6 +29,7 @@ import { useSpeechSynthesis } from '../../hooks/useSpeechSynthesis';
 import { useExamMode } from '../../hooks/useExamMode';
 import { recordViolation, startListening, submitListening } from '../../services/assessmentService';
 import { useToast } from '../../contexts/ToastContext';
+import { levelRules, testPath } from '../../utils/levels';
 
 export default function Listening() {
   const navigate = useNavigate();
@@ -38,8 +39,8 @@ export default function Listening() {
   const [searchParams] = useSearchParams();
   const level = Number(searchParams.get('level')) === 2 ? 2 : 1;
   // Every exit from a Level 2 test returns to the Level 2 portal, never to Level 1.
-  const homePath = level === 2 ? '/level-2' : '/dashboard';
-  const hubPath = level === 2 ? '/level-2' : '/assessment';
+  const homePath = '/dashboard';
+  const hubPath = testPath(level);
   const { showToast } = useToast();
   const { speak, cancel, supported } = useSpeechSynthesis();
 
@@ -269,6 +270,7 @@ export default function Listening() {
   // ---------- Result ----------
   if (phase === 'result' && result) {
     const details = result.details || {};
+    const passMark = levelRules(level).passMark;
     return (
       <Card>
         <CardContent sx={{ textAlign: 'center', p: 4 }}>
@@ -279,8 +281,8 @@ export default function Listening() {
             <ScoreGauge score={result.score} label="Listening Score" />
           </Box>
           <Chip
-            color={result.score >= 75 ? 'success' : 'error'}
-            label={result.score >= 75 ? 'Passed ✓ (pass mark 75)' : 'Below the 75 pass mark'}
+            color={result.score >= passMark ? 'success' : 'error'}
+            label={result.score >= passMark ? `Passed ✓ (pass mark ${passMark})` : `Below the ${passMark} pass mark`}
             sx={{ mb: 2, fontWeight: 700 }}
           />
           <Stack direction="row" spacing={2} justifyContent="center" sx={{ mb: 3 }}>

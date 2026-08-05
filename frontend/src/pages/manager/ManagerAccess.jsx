@@ -125,17 +125,28 @@ export default function ManagerAccess() {
   const isAdmin = !!profile?.admin;
 
   useEffect(() => {
+    let active = true;
     if (!isAdmin) {
       setLoading(false);
-      return;
+      return () => {
+        active = false;
+      };
     }
     Promise.all([getUsers(), getTeams().catch(() => [])])
       .then(([u, t]) => {
+        if (!active) return;
         setUsers(u || []);
         setTeams(t || []);
       })
-      .catch(() => showToast('Failed to load users', 'error'))
-      .finally(() => setLoading(false));
+      .catch(() => {
+        if (active) showToast('Failed to load users', 'error');
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
   }, [isAdmin, showToast]);
 
   const counts = useMemo(() => {

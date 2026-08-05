@@ -4,8 +4,10 @@ import com.cloudfuze.trainer.domain.Role;
 import com.cloudfuze.trainer.entity.User;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
 
 import java.util.Arrays;
+import java.util.LinkedHashSet;
 import java.util.Locale;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -22,28 +24,32 @@ import java.util.stream.Collectors;
  *       the screen that fixes it.</li>
  * </ol>
  *
- * Because the list keeps granting admin regardless of the stored role, a listed email must
- * stay on ADMIN in the database — otherwise the row would contradict their real access.
- * {@link #isBootstrapAdmin} exists so callers can enforce that.
- *
- * This bean replaced two hand-maintained copies of the email list (one in the controller,
- * one in the React sidebar, which had already drifted out of sync and hid the nav item from
- * a real admin). Keep it the only place the list is read.
+ * Default bootstrap emails are ALWAYS included, then any {@code app.super-admin-emails}
+ * entries are merged in — an empty or partial env override must never drop the built-in list.
  */
 @Component
 public class AdminRegistry {
 
+    private static final String DEFAULT_BOOTSTRAP =
+            "abhinav.surattu@cloudfuze.com,bhanu.srikakulam@cloudfuze.com,manmadha.jayamangala@cloudfuze.com";
+
     private final Set<String> bootstrapAdminEmails;
 
-    public AdminRegistry(
-            @Value("${app.super-admin-emails:abhinav.surattu@cloudfuze.com,"
-                    + "bhanu.srikakulam@cloudfuze.com,manmadha.jayamangala@cloudfuze.com}")
-            String emails) {
-        this.bootstrapAdminEmails = Arrays.stream(emails.split(","))
+    public AdminRegistry(@Value("${app.super-admin-emails:}") String configured) {
+        Set<String> emails = new LinkedHashSet<>();
+        parseEmails(DEFAULT_BOOTSTRAP, emails);
+        if (StringUtils.hasText(configured)) {
+            parseEmails(configured, emails);
+        }
+        this.bootstrapAdminEmails = Set.copyOf(emails);
+    }
+
+    private static void parseEmails(String raw, Set<String> into) {
+        Arrays.stream(raw.split(","))
                 .map(String::trim)
                 .filter(s -> !s.isEmpty())
                 .map(s -> s.toLowerCase(Locale.ROOT))
-                .collect(Collectors.toUnmodifiableSet());
+                .forEach(into::add);
     }
 
     /** True when the user administers the app, from either source above. */
@@ -57,5 +63,10 @@ public class AdminRegistry {
     /** True for an email on the configured list — an admin who cannot be demoted away. */
     public boolean isBootstrapAdmin(String email) {
         return email != null && bootstrapAdminEmails.contains(email.trim().toLowerCase(Locale.ROOT));
+    }
+
+    /** For tests and diagnostics — never log in production callers. */
+    Set<String> bootstrapEmails() {
+        return bootstrapAdminEmails;
     }
 }

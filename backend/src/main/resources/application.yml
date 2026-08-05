@@ -1,5 +1,9 @@
 server:
   port: 8080
+  compression:
+    enabled: true
+    mime-types: application/json,application/xml,text/html,text/xml,text/plain
+    min-response-size: 1024
   error:
     include-message: always
 
@@ -10,6 +14,11 @@ spring:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/trainer}
     username: ${POSTGRES_USER:trainer}
     password: ${POSTGRES_PASSWORD:trainer}
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+      connection-timeout: 30000
+      leak-detection-threshold: 60000
   jpa:
     hibernate:
       ddl-auto: update
@@ -34,6 +43,7 @@ app:
     client-id: ${AZURE_CLIENT_ID:}
   cors:
     allowed-origins: ${APP_CORS_ORIGINS:http://localhost:5173}
+  super-admin-emails: ${APP_SUPER_ADMIN_EMAILS:abhinav.surattu@cloudfuze.com,bhanu.srikakulam@cloudfuze.com,manmadha.jayamangala@cloudfuze.com}
   openai:
     api-key: ${OPENAI_API_KEY:}
     model: ${OPENAI_MODEL:gpt-4o-mini}

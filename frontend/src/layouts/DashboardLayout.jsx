@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   AppBar,
@@ -19,6 +19,7 @@ import {
   Tooltip,
   Typography,
 } from '@mui/material';
+import SpaceDashboardIcon from '@mui/icons-material/SpaceDashboardOutlined';
 import LogoutIcon from '@mui/icons-material/Logout';
 import MenuIcon from '@mui/icons-material/Menu';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
@@ -38,12 +39,33 @@ const COLLAPSED_WIDTH = 76;
  * are passed in via `nav` (each: { label, icon, path, match }) so the same shell
  * serves both the employee and manager areas.
  */
-export default function DashboardLayout({ nav = [] }) {
+export default function DashboardLayout({ nav = [], adminNav = [] }) {
   const { profile, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
+
+  const menuNav = useMemo(() => {
+    if (!profile?.admin) return nav;
+    const onEmployee = nav.some((item) => item.path === '/dashboard');
+    const onManager = nav.some((item) => item.path === '/manager');
+    if (onEmployee && adminNav.length) {
+      return [...nav, ...adminNav.filter((item) => !item.adminOnly || profile.admin)];
+    }
+    if (onManager) {
+      return [
+        {
+          label: 'My Dashboard',
+          icon: <SpaceDashboardIcon />,
+          path: '/dashboard',
+          match: (p) => p === '/dashboard',
+        },
+        ...nav.filter((item) => !item.adminOnly || profile.admin),
+      ];
+    }
+    return nav;
+  }, [nav, adminNav, profile]);
 
   const initials = (profile?.name || 'U')
     .split(' ')
@@ -88,7 +110,7 @@ export default function DashboardLayout({ nav = [] }) {
         </Typography>
       )}
       <List sx={{ px: mini ? 1 : 1.5, pt: mini ? 1.5 : 0, flexGrow: 1 }}>
-        {nav
+        {menuNav
           .filter((item) => !item.adminOnly || profile?.admin)
           .map((item) => {
           const active = item.match(location.pathname);

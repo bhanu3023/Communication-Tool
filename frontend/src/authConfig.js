@@ -39,3 +39,16 @@ export const loginRequest = {
 };
 
 export const msalInstance = new PublicClientApplication(msalConfig);
+
+/** One shared bootstrap — MSAL must init once; redirect must be handled before React Router runs. */
+let bootstrapPromise = null;
+
+export function msalBootstrap() {
+  if (!bootstrapPromise) {
+    bootstrapPromise = (async () => {
+      await msalInstance.initialize();
+      return msalInstance.handleRedirectPromise();
+    })();
+  }
+  return bootstrapPromise;
+}

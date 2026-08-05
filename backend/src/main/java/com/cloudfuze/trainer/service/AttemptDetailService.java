@@ -68,10 +68,19 @@ public class AttemptDetailService {
         Map<String, Double> scoreByKey = new HashMap<>();
         Map<String, Object> detailsByKey = new HashMap<>();
         Map<String, Map<String, Double>> dimsByKey = new HashMap<>();
-        for (AssessmentSession s : all) {
-            if (s.getSection() == null || s.getStatus() != SessionStatus.COMPLETED) continue;
-            SectionResult r = sectionResultRepository
-                    .findBySessionIdAndSection(s.getId(), s.getSection()).orElse(null);
+
+        List<AssessmentSession> completed = all.stream()
+                .filter(s -> s.getSection() != null && s.getStatus() == SessionStatus.COMPLETED)
+                .toList();
+        List<Long> sessionIds = completed.stream().map(AssessmentSession::getId).toList();
+        Map<String, SectionResult> resultBySession = new HashMap<>();
+        if (!sessionIds.isEmpty()) {
+            for (SectionResult r : sectionResultRepository.findBySessionIdIn(sessionIds)) {
+                resultBySession.put(r.getSession().getId() + "#" + r.getSection(), r);
+            }
+        }
+        for (AssessmentSession s : completed) {
+            SectionResult r = resultBySession.get(s.getId() + "#" + s.getSection());
             if (r == null) continue;
             String key = key(s.getSection().name(), s.getLevel(), s.getAttemptNumber());
             Object details = json.fromJson(r.getDetails(), Object.class);

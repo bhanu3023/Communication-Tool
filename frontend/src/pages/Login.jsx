@@ -5,7 +5,7 @@ import EditNoteIcon from '@mui/icons-material/EditNoteOutlined';
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import BrandLogo from '../components/BrandLogo';
+import { homeForRole } from '../utils/auth';
 
 /** Authentic four-square Microsoft logo (per Microsoft brand guidelines). */
 function MicrosoftLogo({ size = 18 }) {
@@ -26,10 +26,10 @@ const FEATURES = [
 ];
 
 export default function Login() {
-  const { login, loading, isAuthenticated, profile } = useAuth();
+  const { login, loading, msalReady, isAuthenticated, profile } = useAuth();
 
   if (isAuthenticated) {
-    return <Navigate to={profile?.role === 'MANAGER' ? '/manager' : '/dashboard'} replace />;
+    return <Navigate to={homeForRole(profile)} replace />;
   }
 
   return (
@@ -123,10 +123,10 @@ export default function Login() {
 
           <Button
             onClick={login}
-            disabled={loading}
+            disabled={!msalReady || loading}
             fullWidth
             disableElevation
-            startIcon={loading ? <CircularProgress size={18} /> : <MicrosoftLogo />}
+            startIcon={loading || !msalReady ? <CircularProgress size={18} /> : <MicrosoftLogo />}
             sx={{
               py: 1.35,
               textTransform: 'none',
@@ -140,7 +140,7 @@ export default function Login() {
               '&.Mui-disabled': { bgcolor: '#fff', color: '#9aa0a6' },
             }}
           >
-            {loading ? 'Signing in…' : 'Sign in with Microsoft'}
+            {loading ? 'Signing in…' : !msalReady ? 'Preparing sign-in…' : 'Sign in with Microsoft'}
           </Button>
 
           <Divider sx={{ my: 4 }} />

@@ -2,7 +2,7 @@ import { useNavigate } from 'react-router-dom';
 import { Box, Button, Paper, Typography } from '@mui/material';
 import RocketLaunchIcon from '@mui/icons-material/RocketLaunch';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
-import { levelTheme } from '../utils/levels';
+import { levelTheme, testPath } from '../utils/levels';
 
 /**
  * Level 2 is open but has produced nothing to show yet. Deliberately encouraging
@@ -40,7 +40,7 @@ export default function Level2Empty({ title, body }) {
         variant="contained"
         endIcon={<ArrowForwardIcon />}
         sx={{ bgcolor: t.accent, '&:hover': { bgcolor: t.accent, filter: 'brightness(0.92)' } }}
-        onClick={() => navigate('/level-2')}
+        onClick={() => navigate(testPath(2))}
       >
         Go to Level 2
       </Button>

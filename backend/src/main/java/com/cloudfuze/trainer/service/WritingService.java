@@ -14,11 +14,13 @@ import com.cloudfuze.trainer.service.ai.WritingEvaluation;
 import com.cloudfuze.trainer.util.JsonUtil;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 public class WritingService {
@@ -105,16 +107,19 @@ public class WritingService {
     private final AiService aiService;
     private final JsonUtil json;
     private final AuditService auditService;
+    private final TransactionTemplate transactionTemplate;
 
     public WritingService(ContentService contentService, SessionService sessionService,
                           WritingPromptRepository promptRepository, AiService aiService,
-                          JsonUtil json, AuditService auditService) {
+                          JsonUtil json, AuditService auditService,
+                          org.springframework.transaction.PlatformTransactionManager transactionManager) {
         this.contentService = contentService;
         this.sessionService = sessionService;
         this.promptRepository = promptRepository;
         this.aiService = aiService;
         this.json = json;
         this.auditService = auditService;
+        this.transactionTemplate = new TransactionTemplate(transactionManager);
     }
 
     @Transactional
@@ -147,15 +152,22 @@ public class WritingService {
                 "session=" + request.sessionId() + " prompt=" + request.promptId());
     }
 
-    @Transactional
     public SectionScoreResponse submit(User user, WritingDtos.SubmitRequest request) {
         AssessmentSession session = sessionService.requireOwnedActiveSession(user, request.sessionId());
+        Long sessionId = session.getId();
 
-        // Score each answer sequentially (avoids OpenAI concurrency issues).
+        Map<Long, WritingPrompt> promptsById = promptRepository
+                .findAllById(request.answers().stream().map(WritingDtos.AnswerInput::promptId).toList())
+                .stream()
+                .collect(Collectors.toMap(WritingPrompt::getId, p -> p));
+
+        // Score each answer sequentially (avoids OpenAI concurrency issues) outside the DB transaction.
         List<WritingDtos.WritingItem> items = new ArrayList<>();
         for (WritingDtos.AnswerInput answer : request.answers()) {
-            WritingPrompt prompt = promptRepository.findById(answer.promptId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Prompt not found: " + answer.promptId()));
+            WritingPrompt prompt = promptsById.get(answer.promptId());
+            if (prompt == null) {
+                throw new ResourceNotFoundException("Prompt not found: " + answer.promptId());
+            }
             items.add(scorePrompt(prompt, answer));
         }
         double total = items.stream().mapToDouble(it -> it.evaluation().overall()).sum();
@@ -165,11 +177,13 @@ public class WritingService {
         details.put("items", items);
         details.put("average", score);
 
-        sessionService.completeSection(
-                session, Section.WRITING, score, json.toJson(details), json.toJson(details));
-        auditService.log(user.getEmail(), "WRITING_SUBMIT", "session=" + session.getId() + " score=" + score);
-
-        return new SectionScoreResponse("WRITING", score, true, null, details, details);
+        return transactionTemplate.execute(status -> {
+            AssessmentSession active = sessionService.requireOwnedActiveSession(user, sessionId);
+            sessionService.completeSection(
+                    active, Section.WRITING, score, json.toJson(details), json.toJson(details));
+            auditService.log(user.getEmail(), "WRITING_SUBMIT", "session=" + sessionId + " score=" + score);
+            return new SectionScoreResponse("WRITING", score, true, null, details, details);
+        });
     }
 
     /** Scores one writing answer (AI rubric + integrity) — safe to run in parallel. */

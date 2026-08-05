@@ -3,7 +3,7 @@ import { Box, Button, Chip, LinearProgress, Paper, Stack, Typography } from '@mu
 import LockIcon from '@mui/icons-material/Lock';
 import RocketLaunchIcon from '@mui/icons-material/RocketLaunch';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
-import { SECTION_CODES, gateProgress, isLevel1Complete, passedCount, rulesSummary } from '../utils/levels';
+import { LOCKED_THEME, gateProgress, SECTION_CODES, isLevel1Complete, passedCount, rulesSummary, testPath } from '../utils/levels';
 
 /**
  * Compact Level 2 status strip for the Level 1 dashboard — the pointer to the other
@@ -18,7 +18,7 @@ export default function Level2Banner({ cards }) {
 
   return (
     <Paper
-      onClick={() => navigate('/level-2')}
+      onClick={() => navigate(testPath(unlocked ? 2 : 1))}
       sx={{
         p: 2.5,
         mb: 3,

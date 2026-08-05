@@ -4,7 +4,7 @@ import LockIcon from '@mui/icons-material/Lock';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import RadioButtonUncheckedIcon from '@mui/icons-material/RadioButtonUnchecked';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
-import { LOCKED_THEME, gateProgress } from '../utils/levels';
+import { LOCKED_THEME, gateProgress, testPath } from '../utils/levels';
 
 /** One row of the unlock checklist. */
 function GateRow({ item }) {
@@ -58,7 +58,7 @@ export default function Level2Gate({ cards, blurb }) {
           variant="contained"
           sx={{ mt: 2 }}
           endIcon={<ArrowForwardIcon />}
-          onClick={() => navigate('/assessment')}
+          onClick={() => navigate(testPath(1))}
         >
           Go to Level 1 tests
         </Button>

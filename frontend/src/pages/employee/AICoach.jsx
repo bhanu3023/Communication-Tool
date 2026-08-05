@@ -1,20 +1,15 @@
-import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Box, Button, Chip, Fade, Grid, Paper, Stack, Typography } from '@mui/material';
+import { useCallback, useEffect, useState } from 'react';
+import { Box, Fade, Grid, Paper, Stack, Typography } from '@mui/material';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ReportProblemIcon from '@mui/icons-material/ReportProblem';
 import LightbulbOutlinedIcon from '@mui/icons-material/LightbulbOutlined';
-import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import LoadingScreen from '../../components/LoadingScreen';
-import LevelTabs from '../../components/LevelTabs';
-import Level2Gate from '../../components/Level2Gate';
-import Level2Empty from '../../components/Level2Empty';
+import { LevelToggleRow } from '../../components/LevelToggle';
 import { getDashboard, getSections } from '../../services/assessmentService';
 import { useToast } from '../../contexts/ToastContext';
-import { isLevel1Complete, levelRules, rulesSummary } from '../../utils/levels';
+import { isLevel1Complete } from '../../utils/levels';
 
-// Visual config per feedback column.
 const COLUMNS = [
   {
     key: 'strengths',
@@ -71,10 +66,6 @@ function FeedbackColumn({ col, items }) {
         <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
           {col.title}
         </Typography>
-        <Box sx={{ flexGrow: 1 }} />
-        {items && items.length > 0 && (
-          <Chip size="small" label={items.length} sx={{ bgcolor: '#fff', fontWeight: 700 }} />
-        )}
       </Stack>
 
       <Stack spacing={1.25}>
@@ -91,30 +82,40 @@ function FeedbackColumn({ col, items }) {
   );
 }
 
-/**
- * AI Coach — the employee's overall, section-aware coaching in its own section.
- * (Per-attempt detail lives on the Feedback page.)
- */
 export default function AICoach() {
   const [data, setData] = useState(null);
   const [level1Cards, setLevel1Cards] = useState(null);
   const [level, setLevel] = useState(1);
   const [loading, setLoading] = useState(true);
-  const navigate = useNavigate();
   const { showToast } = useToast();
 
-  // Coaching is computed per level on the server (from that level's latest scores),
-  // so switching tabs refetches rather than filtering client-side.
+  const level2Unlocked = isLevel1Complete(level1Cards);
+  const isUnlocked = useCallback((n) => n === 1 || level2Unlocked, [level2Unlocked]);
+
   useEffect(() => {
+    if (level !== 1 && level1Cards && !isUnlocked(level)) {
+      setLevel(1);
+    }
+  }, [level, level1Cards, isUnlocked]);
+
+  useEffect(() => {
+    let active = true;
     setLoading(true);
-    // This is the ONE page that renders the coaching summary, so it opts into the AI call.
     getDashboard(level, { ai: true })
-      .then(setData)
-      .catch(() => showToast('Failed to load AI coach', 'error'))
-      .finally(() => setLoading(false));
+      .then((d) => {
+        if (active) setData(d);
+      })
+      .catch(() => {
+        if (active) showToast('Failed to load AI coach', 'error');
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
   }, [level, showToast]);
 
-  // Level 1 cards drive the gate, whichever tab is open.
   useEffect(() => {
     getSections(1)
       .then(setLevel1Cards)
@@ -125,12 +126,9 @@ export default function AICoach() {
   if (!data) return null;
 
   const fb = data.aiFeedback || {};
-  const level2Open = isLevel1Complete(level1Cards);
-  const hasLevel2Data = level === 2 && (data.cards || []).some((c) => c.attemptsUsed > 0);
 
   return (
     <Box>
-      {/* Header banner */}
       <Paper
         sx={{
           p: { xs: 3, md: 4 },
@@ -139,72 +137,41 @@ export default function AICoach() {
           background: 'linear-gradient(120deg, #ffffff 50%, #efeafc 100%)',
         }}
       >
-        <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 1 }}>
-          <Box
-            sx={{
-              width: 44,
-              height: 44,
-              borderRadius: 2,
-              display: 'grid',
-              placeItems: 'center',
-              color: '#fff',
-              bgcolor: 'primary.main',
-            }}
-          >
-            <AutoAwesomeIcon />
+        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems={{ sm: 'center' }} justifyContent="space-between">
+          <Box>
+            <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 1 }}>
+              <Box
+                sx={{
+                  width: 44,
+                  height: 44,
+                  borderRadius: 2,
+                  display: 'grid',
+                  placeItems: 'center',
+                  color: '#fff',
+                  bgcolor: 'primary.main',
+                }}
+              >
+                <AutoAwesomeIcon />
+              </Box>
+              <Typography variant="h4">AI Coach</Typography>
+            </Stack>
+            <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 640 }}>
+              Section-by-section coaching that updates after each attempt.
+            </Typography>
           </Box>
-          <Typography variant="h4">AI Coach</Typography>
+          <LevelToggleRow value={level} onChange={setLevel} isUnlocked={isUnlocked} />
         </Stack>
-        <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 640 }}>
-          Personalized, <strong>section-by-section</strong> coaching across Listening, Speaking and
-          Writing. This updates <strong>after each attempt</strong> — sections you haven&apos;t taken
-          yet show how to get started. For attempt-by-attempt detail, open the{' '}
-          <strong>Feedback</strong> section.
-        </Typography>
-        <LevelTabs value={level} onChange={setLevel} cards={level1Cards} sx={{ mt: 2.5 }} />
       </Paper>
 
-      {level === 1 || hasLevel2Data ? (
-        <Fade in timeout={260} key={`coach-${level}`}>
-          <Box>
-            {/* Three feedback columns */}
-            <Grid container spacing={2.5}>
-              {COLUMNS.map((col) => (
-                <Grid item xs={12} md={4} key={col.key}>
-                  <FeedbackColumn col={col} items={fb[col.key]} />
-                </Grid>
-              ))}
+      <Fade in timeout={260} key={`coach-${level}`}>
+        <Grid container spacing={2.5}>
+          {COLUMNS.map((col) => (
+            <Grid item xs={12} md={4} key={col.key}>
+              <FeedbackColumn col={col} items={fb[col.key]} />
             </Grid>
-
-            {/* CTA */}
-            <Box sx={{ mt: 3 }}>
-              <Button
-                variant="contained"
-                endIcon={<ArrowForwardIcon />}
-                onClick={() => navigate(level === 2 ? '/level-2' : '/assessment')}
-              >
-                Go to Test
-              </Button>
-            </Box>
-          </Box>
-        </Fade>
-      ) : (
-        <Fade in timeout={260} key="coach2-empty">
-          <Box>
-            {level2Open ? (
-              <Level2Empty
-                title="Level 2 coaching starts with your first attempt"
-                body={`Your Level 2 portal is open (${rulesSummary(2)}). Once you complete a Level 2 test, your strengths, focus areas and suggestions for that level appear here — separate from your Level 1 coaching, and judged against the higher ${levelRules(2).passMark} bar.`}
-              />
-            ) : (
-              <Level2Gate
-                cards={level1Cards}
-                blurb={`Level 2 coaching unlocks with the portal. Pass every Level 1 section first — only your best attempt in each counts. Level 2 then runs on ${rulesSummary(2)}.`}
-              />
-            )}
-          </Box>
-        </Fade>
-      )}
+          ))}
+        </Grid>
+      </Fade>
     </Box>
   );
 }

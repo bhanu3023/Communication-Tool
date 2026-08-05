@@ -170,12 +170,28 @@ export default function EmployeeDetail() {
 
   // Sections, warnings and feedback are all per level, so a level change refetches.
   useEffect(() => {
+    let active = true;
     setLoading(true);
     getEmployeeDetail(id, level)
-      .then(setDetail)
-      .catch((e) => showToast(e?.response?.data?.message || 'Failed to load employee', 'error'))
-      .finally(() => setLoading(false));
-    getEmployeeAttempts(id, level).then(setAttempts).catch(() => setAttempts([]));
+      .then((d) => {
+        if (active) setDetail(d);
+      })
+      .catch((e) => {
+        if (active) showToast(e?.response?.data?.message || 'Failed to load employee', 'error');
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    getEmployeeAttempts(id, level)
+      .then((a) => {
+        if (active) setAttempts(a);
+      })
+      .catch(() => {
+        if (active) setAttempts([]);
+      });
+    return () => {
+      active = false;
+    };
   }, [id, level, showToast]);
 
   const handleGrant = async (section) => {

@@ -24,6 +24,27 @@ import { getSpeakingRecording } from '../services/assessmentService';
 import { useSpeechSynthesis } from '../hooks/useSpeechSynthesis';
 import { scoreColor } from '../utils/format';
 
+/** Stored feedback JSON is usually an object; coerce so render never throws. */
+function coerceDetails(details) {
+  if (details == null) return {};
+  if (typeof details === 'string') {
+    try {
+      const parsed = JSON.parse(details);
+      return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+    } catch {
+      return {};
+    }
+  }
+  if (typeof details === 'object' && !Array.isArray(details)) return details;
+  return {};
+}
+
+function textOrDash(value) {
+  if (value == null) return '—';
+  if (typeof value === 'string' || typeof value === 'number') return String(value);
+  return '—';
+}
+
 // Recording PLAYBACK in feedback is temporarily disabled (per request). The audio is
 // still captured, stored, and evaluated on the backend — only the player UI is hidden
 // here (user dashboard + manager view). Flip this to true to bring the
@@ -139,7 +160,7 @@ function SubScore({ label, value }) {
         {label}
       </Typography>
       <Typography sx={{ fontWeight: 700, lineHeight: 1.2, color: `${c}.main` }}>
-        {Math.round(value)}
+        {Number.isFinite(Number(value)) ? Math.round(Number(value)) : '—'}
       </Typography>
     </Box>
   );
@@ -159,7 +180,7 @@ function SectionHeader({ icon, title, score, color }) {
 
 /** Listening feedback: score, correct/wrong, and the answer sheet. */
 export function ListeningSection({ details, score, showHeader = true }) {
-  const listening = details || {};
+  const listening = coerceDetails(details);
   const hasData = listening.answers || listening.correctCount != null;
   return (
     <Box>
@@ -185,9 +206,9 @@ export function ListeningSection({ details, score, showHeader = true }) {
               <TableBody>
                 {listening.answers.map((a, i) => (
                   <TableRow key={i}>
-                    <TableCell>{a.questionText}</TableCell>
-                    <TableCell align="center">{a.selectedOption || '—'}</TableCell>
-                    <TableCell align="center">{a.correctOption}</TableCell>
+                    <TableCell>{textOrDash(a.questionText)}</TableCell>
+                    <TableCell align="center">{textOrDash(a.selectedOption)}</TableCell>
+                    <TableCell align="center">{textOrDash(a.correctOption)}</TableCell>
                     <TableCell align="center">
                       <Chip size="small" color={a.correct ? 'success' : 'error'} label={a.correct ? '✓' : '✗'} />
                     </TableCell>
@@ -206,7 +227,7 @@ export function ListeningSection({ details, score, showHeader = true }) {
 
 /** Speaking feedback: per-sentence target vs said, sub-scores, tips, and recording. */
 export function SpeakingSection({ details, score, showHeader = true, sessionId, managerView = false }) {
-  const speaking = details || {};
+  const speaking = coerceDetails(details);
   const tts = useSpeechSynthesis();
   return (
     <Box>
@@ -217,7 +238,9 @@ export function SpeakingSection({ details, score, showHeader = true, sessionId, 
         speaking.items.map((it, i) => {
           const ev = it.evaluation || {};
           const said = (it.transcript || '').trim();
-          const tips = Array.isArray(ev.suggestions) ? ev.suggestions : [];
+          const tips = Array.isArray(ev.suggestions)
+            ? ev.suggestions.filter((s) => s != null).map(String)
+            : [];
           return (
             <Paper variant="outlined" key={i} sx={{ p: 2.5, mb: 2, borderRadius: 3 }}>
               {/* Header: sentence number + overall score badge */}
@@ -343,7 +366,7 @@ export function SpeakingSection({ details, score, showHeader = true, sessionId, 
 
 /** Writing feedback: per-prompt evaluation metrics and suggestions. */
 export function WritingSection({ details, score, showHeader = true }) {
-  const writing = details || {};
+  const writing = coerceDetails(details);
   return (
     <Box>
       {showHeader && (
@@ -379,7 +402,7 @@ export function WritingSection({ details, score, showHeader = true }) {
                   <Typography variant="caption" color="error.main">Mistakes</Typography>
                   <Box component="ul" sx={{ m: '4px 0 0', pl: 2.5 }}>
                     {ev.mistakes.map((m, j) => (
-                      <Typography key={j} component="li" variant="body2">{m}</Typography>
+                      <Typography key={j} component="li" variant="body2">{String(m)}</Typography>
                     ))}
                   </Box>
                 </Box>
@@ -390,7 +413,7 @@ export function WritingSection({ details, score, showHeader = true }) {
                   <Typography variant="caption" color="text.secondary">Where to improve</Typography>
                   <Box component="ul" sx={{ m: '4px 0 0', pl: 2.5 }}>
                     {ev.suggestions.map((sug, j) => (
-                      <Typography key={j} component="li" variant="body2">{sug}</Typography>
+                      <Typography key={j} component="li" variant="body2">{String(sug)}</Typography>
                     ))}
                   </Box>
                 </Box>
@@ -421,9 +444,10 @@ export function WritingSection({ details, score, showHeader = true }) {
  * this renders just that section's detail. Shared by dashboard + manager portal.
  */
 export default function AttemptReview({ attempt, managerView = false }) {
-  const { section, details, score, sessionId } = attempt;
-  if (section === 'LISTENING') return <ListeningSection details={details} score={score} showHeader={false} />;
-  if (section === 'SPEAKING') {
+  const { section, details, score, sessionId } = attempt || {};
+  const code = String(section || '').toUpperCase();
+  if (code === 'LISTENING') return <ListeningSection details={details} score={score} showHeader={false} />;
+  if (code === 'SPEAKING') {
     return (
       <SpeakingSection
         details={details}
@@ -434,7 +458,7 @@ export default function AttemptReview({ attempt, managerView = false }) {
       />
     );
   }
-  if (section === 'WRITING') {
+  if (code === 'WRITING') {
     return <WritingSection details={details} score={score} showHeader={false} />;
   }
   return null;

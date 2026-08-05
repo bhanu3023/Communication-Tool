@@ -1,95 +1,114 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Box, Grid } from '@mui/material';
+import { Box, Button, Card, CardContent, Paper, Stack, Typography } from '@mui/material';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
-import LoadingScreen from '../../components/LoadingScreen';
-import LevelHero, { HeroButton } from '../../components/LevelHero';
-import SectionTile from '../../components/SectionTile';
+import AutoAwesomeIcon from '@mui/icons-material/AutoAwesomeOutlined';
+import DashboardProgress from '../../components/DashboardProgress';
 import AttemptHistoryTable from '../../components/AttemptHistoryTable';
-import Level2Banner from '../../components/Level2Banner';
-import Level2UnlockDialog from '../../components/Level2UnlockDialog';
+import LoadingScreen from '../../components/LoadingScreen';
 import { getDashboard } from '../../services/assessmentService';
 import { useToast } from '../../contexts/ToastContext';
-import { isUnlockCelebrated, levelRules, markUnlockCelebrated } from '../../utils/levels';
+import { sectionTitle, testPath } from '../../utils/levels';
 
 const LEVEL = 1;
 
-/**
- * Level 1 — the employee's landing page. Hero with the "Go to Test" entry point, a
- * read-only status tile per section, the Level 2 pointer, and the attempt history.
- * Level 2 (`pages/employee/Level2.jsx`) is built from the same three blocks in the
- * same order, so only the accent tells them apart.
- */
 export default function Dashboard() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [showUnlock, setShowUnlock] = useState(false);
   const navigate = useNavigate();
   const { showToast } = useToast();
 
   useEffect(() => {
+    let active = true;
     getDashboard(LEVEL)
       .then((d) => {
-        setData(d);
-        // The unlock moment: fires on the first dashboard load after the third
-        // Level 1 section is passed, then never again. `nextLevelUnlocked` is the
-        // server's own verdict, so the celebration can never disagree with the gate.
-        if (d.nextLevelUnlocked && !isUnlockCelebrated()) setShowUnlock(true);
+        if (active) setData(d);
       })
-      .catch(() => showToast('Failed to load dashboard', 'error'))
-      .finally(() => setLoading(false));
+      .catch(() => {
+        if (active) showToast('Failed to load dashboard', 'error');
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
   }, [showToast]);
 
-  const closeUnlock = () => {
-    markUnlockCelebrated();
-    setShowUnlock(false);
-  };
+  const hasStarted = useMemo(
+    () => (data?.cards || []).some((c) => c.attemptsUsed > 0),
+    [data?.cards],
+  );
+
+  const coachHint = useMemo(() => {
+    const attempted = (data?.cards || []).filter((c) => c.bestScore != null);
+    if (!attempted.length) return null;
+    const top = attempted.reduce((a, b) => (b.bestScore > a.bestScore ? b : a));
+    const low = attempted.reduce((a, b) => (b.bestScore < a.bestScore ? b : a));
+    return { top, low };
+  }, [data?.cards]);
 
   if (loading) return <LoadingScreen />;
   if (!data) return null;
 
   return (
     <Box>
-      <LevelHero
-        level={LEVEL}
+      <Paper sx={{ p: { xs: 3, md: 4 }, mb: 3, borderRadius: 3, background: 'linear-gradient(120deg, #ffffff 55%, #efeafc 100%)' }}>
+        <Typography variant="h4" sx={{ fontWeight: 700, mb: 0.5 }}>
+          Welcome back, {data.name.split(' ')[0]} 👋
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 560 }}>
+          {hasStarted
+            ? 'Here is how you are doing across Listening, Speaking, and Writing.'
+            : 'Your progress will appear here once you begin. Each section tracks separately.'}
+        </Typography>
+      </Paper>
+
+      <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1.5 }}>
+        Your progress
+      </Typography>
+      <DashboardProgress
         cards={data.cards}
-        title={`Welcome back, ${data.name.split(' ')[0]} 👋`}
-        blurb={`Take Listening, Speaking and Writing in any order — each section is scored on its own, with up to ${levelRules(LEVEL).attempts} attempts. Pass all three to unlock Level 2.`}
-        action={
-          <HeroButton level={LEVEL} endIcon={<ArrowForwardIcon />} onClick={() => navigate('/assessment')}>
-            Go to Test
-          </HeroButton>
-        }
+        history={data.history}
+        onStartTest={!hasStarted ? () => navigate(testPath(1)) : undefined}
       />
 
-      <Grid container spacing={2} sx={{ mb: 3 }}>
-        {data.cards.map((card) => (
-          <Grid item xs={12} md={4} key={card.section}>
-            <SectionTile card={card} level={LEVEL} />
-          </Grid>
-        ))}
-      </Grid>
-
-      {/* Pointer to the Level 2 portal (shows gate progress while still locked) */}
-      <Level2Banner cards={data.cards} />
+      {hasStarted && (
+        <Card sx={{ mt: 3, mb: 3, borderRadius: 3 }}>
+          <CardContent>
+            <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
+              <AutoAwesomeIcon color="primary" fontSize="small" />
+              <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+                Coaching
+              </Typography>
+            </Stack>
+            {!coachHint ? (
+              <Typography variant="body2" color="text.secondary">
+                Complete at least one section to unlock personalised tips in AI Coach.
+              </Typography>
+            ) : (
+              <Typography variant="body2" color="text.secondary">
+                AI Coach breaks down what to keep doing in {sectionTitle(coachHint.top.section)} and practical
+                steps to strengthen {sectionTitle(coachHint.low.section)}.
+              </Typography>
+            )}
+            <Button
+              variant="text"
+              size="small"
+              endIcon={<ArrowForwardIcon />}
+              sx={{ mt: 1.5, px: 0 }}
+              onClick={() => navigate('/coach')}
+            >
+              Open AI Coach
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
       <AttemptHistoryTable
         rows={data.history}
-        level={LEVEL}
-        emptyMessage={
-          <>
-            No attempts completed yet — press <strong>Go to Test</strong> to begin.
-          </>
-        }
-      />
-
-      <Level2UnlockDialog
-        open={showUnlock}
-        onEnter={() => {
-          closeUnlock();
-          navigate('/level-2');
-        }}
-        onClose={closeUnlock}
+        showLevelBadge={false}
+        onTestClick={!hasStarted ? () => navigate(testPath(1)) : undefined}
       />
     </Box>
   );

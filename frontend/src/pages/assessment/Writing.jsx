@@ -27,6 +27,7 @@ import ExamWarningDialog from '../../components/ExamWarningDialog';
 import ScoringScreen from '../../components/ScoringScreen';
 import { recordViolation, saveDraft, startWriting, submitWriting } from '../../services/assessmentService';
 import { useToast } from '../../contexts/ToastContext';
+import { levelRules, testPath } from '../../utils/levels';
 
 /** Builds a fill-in skeleton from the outline: each point becomes a line to complete. */
 function buildTemplate(prompt) {
@@ -43,8 +44,8 @@ export default function Writing() {
   const [searchParams] = useSearchParams();
   const level = Number(searchParams.get('level')) === 2 ? 2 : 1;
   // Every exit from a Level 2 test returns to the Level 2 portal, never to Level 1.
-  const homePath = level === 2 ? '/level-2' : '/dashboard';
-  const hubPath = level === 2 ? '/level-2' : '/assessment';
+  const homePath = '/dashboard';
+  const hubPath = testPath(level);
   const { showToast } = useToast();
 
   const [phase, setPhase] = useState('intro'); // intro | thinking | writing | result
@@ -312,6 +313,7 @@ export default function Writing() {
 
   // ---------- Result ----------
   if (phase === 'result' && result) {
+    const passMark = levelRules(level).passMark;
     return (
       <Box sx={{ maxWidth: 820, mx: 'auto' }}>
         <Card sx={{ mb: 2 }}>
@@ -319,8 +321,8 @@ export default function Writing() {
             <Typography variant="h5" gutterBottom>Writing Complete</Typography>
             <Box sx={{ my: 2 }}><ScoreGauge score={result.score} label="Writing Score" /></Box>
             <Chip
-              color={result.score >= 75 ? 'success' : 'error'}
-              label={result.score >= 75 ? 'Passed ✓ (pass mark 75)' : 'Below the 75 pass mark'}
+              color={result.score >= passMark ? 'success' : 'error'}
+              label={result.score >= passMark ? `Passed ✓ (pass mark ${passMark})` : `Below the ${passMark} pass mark`}
               sx={{ mb: 1, fontWeight: 700 }}
             />
           </CardContent>
