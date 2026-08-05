@@ -298,7 +298,7 @@ public class ManagerService {
                         u.getRole().name(),
                         u.getTeam() != null ? u.getTeam().getName() : null,
                         u.getDepartment() != null ? u.getDepartment().getName() : null,
-                        adminRegistry.isBootstrapAdmin(u.getEmail())))
+                        adminRegistry.isRootAdmin(u.getEmail())))
                 .toList();
     }
 
@@ -337,7 +337,7 @@ public class ManagerService {
                 saved.getId(), saved.getName(), saved.getEmail(), saved.getEmployeeId(),
                 role.name(), finalTeam,
                 saved.getDepartment() != null ? saved.getDepartment().getName() : null,
-                adminRegistry.isBootstrapAdmin(saved.getEmail()));
+                adminRegistry.isRootAdmin(saved.getEmail()));
     }
 
     /**

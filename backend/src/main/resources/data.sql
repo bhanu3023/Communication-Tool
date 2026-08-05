@@ -37,21 +37,22 @@ WHERE d.name = 'Migration'
 -- ---------- Managers ----------
 INSERT INTO users (created_at, updated_at, employee_id, name, email, role, department_id, team_id, manager_id)
 SELECT now(), now(), v.emp, v.name, v.email, 'MANAGER', d.id, t.id, NULL
+-- Abhinav and Bhanu are seeded by the Admins block below, not here: creating them as MANAGER
+-- first would make that block's create-if-absent skip them, leaving them short of admin on a
+-- fresh database. Only genuine managers belong in this list.
 FROM (VALUES
     ('CF-1001', 'Abhishek Sakala',  'Abhishek.Sakala@cloudfuze.com'),
-    ('CF-1009', 'Abhinav Surattu',  'Abhinav.surattu@cloudfuze.com'),
-    ('CF-1010', 'Ajay Singh',       'ajay.singh@cloudfuze.com'),
-    ('CF-1011', 'Bhanu Srikakulam', 'Bhanu.Srikakulam@cloudfuze.com')
+    ('CF-1010', 'Ajay Singh',       'ajay.singh@cloudfuze.com')
     ) AS v(emp, name, email)
 JOIN department d ON d.name = 'Migration'
 JOIN team t ON t.name = 'Migration'
 WHERE NOT EXISTS (SELECT 1 FROM users WHERE role = 'MANAGER');
 
 -- ---------- Admins ----------
--- ADMIN is a real role now (see domain/Role). These are the bootstrap admins from
--- AdminRegistry's configured list; they also keep admin rights by email whatever the stored
--- role is, so the row is kept on ADMIN to avoid contradicting their actual access.
--- Per-email idempotent: create if absent, else promote whatever role they currently hold.
+-- ADMIN is a real role now (see domain/Role). These three start as admins; only the FIRST is
+-- AdminRegistry's root account, which keeps admin rights by email whatever the stored role is.
+-- Per-email idempotent: create the row if the person does not exist yet, and nothing more —
+-- see the UPDATE below for why this must not re-promote an existing user.
 INSERT INTO users (created_at, updated_at, employee_id, name, email, role, department_id, team_id, manager_id)
 SELECT now(), now(), v.emp, v.name, v.email, 'ADMIN', d.id, t.id, NULL
 FROM department d
@@ -64,10 +65,30 @@ CROSS JOIN (VALUES
 WHERE d.name = 'Migration'
   AND NOT EXISTS (SELECT 1 FROM users u WHERE lower(u.email) = lower(v.email));
 
+-- First introduction of the ADMIN role only: grant it to the original three. The guard is
+-- "nobody is an ADMIN yet", which is true exactly once — on the deploy that first ships the
+-- role, where these people already exist as MANAGER rows and so were skipped by the INSERT
+-- above. Postgres evaluates the NOT EXISTS against the snapshot taken at statement start, so
+-- all three are promoted by this single statement rather than just the first.
+--
+-- It must NOT re-run on later boots. This statement executes on every start, and while it
+-- listed all three unconditionally it silently undid any removal of their admin access the
+-- next time the container restarted — which made "Remove admin access" a lie. Once an admin
+-- exists this is a no-op, so their role then lives purely in the database where the User
+-- Access screen can change it for good.
 UPDATE users SET role = 'ADMIN', manager_id = NULL, updated_at = now()
-WHERE lower(email) IN ('manmadha.jayamangala@cloudfuze.com',
-                       'abhinav.surattu@cloudfuze.com',
-                       'bhanu.srikakulam@cloudfuze.com')
+WHERE lower(email) IN ('abhinav.surattu@cloudfuze.com',
+                       'bhanu.srikakulam@cloudfuze.com',
+                       'manmadha.jayamangala@cloudfuze.com')
+  AND role <> 'ADMIN'
+  AND NOT EXISTS (SELECT 1 FROM users WHERE role = 'ADMIN');
+
+-- The root admin is re-asserted on EVERY boot — AdminRegistry grants them admin by email
+-- regardless of the stored role, so a row that says otherwise would contradict their real
+-- access. This runs after the bootstrap above, which would otherwise see the admin it creates
+-- and skip the other two.
+UPDATE users SET role = 'ADMIN', manager_id = NULL, updated_at = now()
+WHERE lower(email) = 'abhinav.surattu@cloudfuze.com'
   AND role <> 'ADMIN';
 
 -- ---------- Employees ----------
