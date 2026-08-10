@@ -280,13 +280,17 @@ export function SpeakingSection({ details, score, showHeader = true, sessionId, 
                   color="text.secondary"
                   sx={{ display: 'block', fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.5 }}
                 >
-                  You said
+                  You said — from your recording
                 </Typography>
                 <Typography
                   variant="body2"
                   sx={{ color: said ? 'text.primary' : 'error.main', fontStyle: said ? 'normal' : 'italic' }}
                 >
-                  {said ? `“${said}”` : 'No speech detected.'}
+                  {said
+                    ? `“${said}”`
+                    : it.transcriptionFailed
+                      ? 'Your recording could not be processed, so there is no text to show. Your score is unaffected.'
+                      : 'No speech detected.'}
                 </Typography>
               </Box>
 

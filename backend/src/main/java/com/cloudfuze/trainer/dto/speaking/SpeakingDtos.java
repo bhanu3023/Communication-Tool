@@ -28,7 +28,17 @@ public final class SpeakingDtos {
     public record SubmitRequest(@NotNull Long sessionId, @NotNull List<SpeechResultInput> results) {
     }
 
-    /** Per-sentence outcome persisted in the section details. */
-    public record SpeechItem(String expected, String transcript, SpeakingEvaluation evaluation, boolean hasAudio) {
+    /**
+     * Per-sentence outcome persisted in the section details.
+     *
+     * <p>{@code transcript} is always what the RECORDING was heard to say, never what the
+     * browser's live recogniser reported. That live text exists only so the candidate sees
+     * something while speaking; it is unreliable and trivially forged, so it must not appear in
+     * feedback. When transcription could not run, {@code transcript} is empty and
+     * {@code transcriptionFailed} is true — which the UI must show as "could not be processed"
+     * rather than as the candidate having said nothing.
+     */
+    public record SpeechItem(String expected, String transcript, SpeakingEvaluation evaluation,
+                             boolean hasAudio, boolean transcriptionFailed) {
     }
 }

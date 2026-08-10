@@ -76,21 +76,30 @@ public class SpeakingService {
                 }
             }
         }
-        // Transcribe the recording server-side and prefer that over whatever the browser heard.
-        // The client transcript comes from the Web Speech API, which drops the opening words
-        // while the mic is still coming up, is Chrome-only, and is trivially forgeable. This is
-        // what makes the candidate's actual audio decide their score rather than just be stored
-        // alongside it. Falls back to the client transcript when transcription is unavailable.
+        // Transcribe the recording server-side. This is the ONLY text that may be shown back to
+        // anyone: the client transcript comes from the browser's Web Speech API, which drops the
+        // opening words while the mic is still coming up, is Chrome-only, and can be set to
+        // anything by whoever calls the endpoint. It exists so the candidate sees something
+        // while they speak, and for nothing else.
+        String heard = null;
+        boolean transcriptionFailed = false;
         if (eval == null && audio != null) {
-            String recognised = aiService.transcribe(audio);
-            if (recognised != null && !recognised.isBlank()) {
-                transcript = recognised;
-            }
+            heard = aiService.transcribe(audio);
+            transcriptionFailed = heard == null;
+        }
+        if (heard != null && !heard.isBlank()) {
+            transcript = heard;
         }
         if (eval == null) {
+            // Scoring still falls back to the client transcript when transcription could not
+            // run, so an OpenAI outage cannot zero a candidate's section for something outside
+            // their control. Feedback shows "could not be processed" instead of that text.
             eval = aiService.scoreSpeaking(expected, transcript);
         }
-        return new SpeakingDtos.SpeechItem(expected, transcript, eval, false);
+        // Never hand back the browser's text. Empty + transcriptionFailed reads as "we could not
+        // process your recording"; empty on its own still reads as "no speech detected".
+        String shown = transcriptionFailed ? "" : transcript;
+        return new SpeakingDtos.SpeechItem(expected, shown, eval, false, transcriptionFailed);
     }
 
     /** Persists (or replaces) one sentence's recorded audio; returns true if audio was stored. */
@@ -157,7 +166,8 @@ public class SpeakingService {
             SpeakingDtos.SpeechItem scored = scoreSentence(input);
             boolean hasAudio = storeRecording(session.getId(), index, input.audioBase64());
             items.add(new SpeakingDtos.SpeechItem(
-                    scored.expected(), scored.transcript(), scored.evaluation(), hasAudio));
+                    scored.expected(), scored.transcript(), scored.evaluation(), hasAudio,
+                    scored.transcriptionFailed()));
             index++;
         }
         double total = items.stream().mapToDouble(it -> it.evaluation().overall()).sum();

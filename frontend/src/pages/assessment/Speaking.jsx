@@ -588,7 +588,7 @@ export default function Speaking() {
                 )}
 
                 <Typography variant="caption" color="text.secondary" display="block">
-                  You said
+                  You said — from your recording
                 </Typography>
                 <Typography
                   sx={{
@@ -597,7 +597,11 @@ export default function Speaking() {
                     fontStyle: said ? 'normal' : 'italic',
                   }}
                 >
-                  {said ? `“${said}”` : 'No speech was detected for this sentence.'}
+                  {said
+                    ? `“${said}”`
+                    : it.transcriptionFailed
+                      ? 'Your recording could not be processed, so there is no text to show. Your score is unaffected.'
+                      : 'No speech was detected for this sentence.'}
                 </Typography>
 
                 {(() => {
