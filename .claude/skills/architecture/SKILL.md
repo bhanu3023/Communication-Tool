@@ -24,7 +24,7 @@ React SPA (MSAL) → Microsoft **ID token** → `POST /api/auth/login` → backe
 - **Services**: all business logic; only callers of repositories.
 - **`service.ai`**: `AiService` facade over `OpenAiClient` (JSON-mode chat) with a deterministic
   `MockAiEvaluator` fallback. **Any OpenAI error → mock result; the app never breaks.** OpenAI types
-  stay inside this package. Optional `AzureSpeechService` for real pronunciation scoring.
+  stay inside this package. Speaking is graded from the recording, transcribed by `AiService.transcribe`.
 - **entity/repository/dto/domain**: JPA entities, Spring Data repos, per-module DTO records, enums.
 
 ## Assessment modules

@@ -20,7 +20,7 @@ Mirror of the structural facts (long-form in `docs/ARCHITECTURE.md`; boundaries 
 `exception`, `mapper`, `util`, `domain`.
 - **service.ai**: `AiService` facade over `OpenAiClient` (JSON-mode chat) with deterministic
   `MockAiEvaluator` fallback — **any OpenAI error falls back to mock; the app never breaks**. Optional
-  `AzureSpeechService` for real pronunciation scoring.
+  OpenAI speech-to-text (`AiService.transcribe`) turns the recording into the text that is graded.
 
 ## Modules
 Three assessment modules (Listening / Speaking / Writing), each: controller `/api/<module>` →

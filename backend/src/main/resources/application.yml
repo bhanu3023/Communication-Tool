@@ -45,10 +45,6 @@ app:
     # trusting whatever the browser's Web Speech API heard.
     transcribe-model: ${OPENAI_TRANSCRIBE_MODEL:whisper-1}
     base-url: ${OPENAI_BASE_URL:https://api.openai.com/v1}
-  azure-speech:
-    # Azure AI Speech (Cognitive Services) resource — enables real voice pronunciation scoring.
-    key: ${AZURE_SPEECH_KEY:}
-    region: ${AZURE_SPEECH_REGION:}
 
 springdoc:
   swagger-ui:

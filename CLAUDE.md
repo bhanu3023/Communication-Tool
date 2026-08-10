@@ -110,7 +110,7 @@ user and issues an app JWT → SPA sends `Authorization: Bearer <jwt>` on every 
 Copy `.env.example` → `.env` and fill in values. Key vars (full list in `.env.example`):
 `AZURE_TENANT_ID`, `AZURE_CLIENT_ID` (+ `VITE_` copies) — **required**; `APP_JWT_SECRET`,
 `APP_JWT_EXPIRATION_MINUTES`, `APP_CORS_ORIGINS`; `OPENAI_API_KEY` (+ `OPENAI_MODEL`,
-`OPENAI_AUDIO_MODEL`) — optional (mock fallback); `AZURE_SPEECH_KEY`/`_REGION` — optional;
+`OPENAI_AUDIO_MODEL`, `OPENAI_TRANSCRIBE_MODEL`) — optional (mock fallback);
 `APP_DEV_LOGIN_ENABLED`/`VITE_DEV_LOGIN` — keep `false` outside dev.
 
 ## Common Commands

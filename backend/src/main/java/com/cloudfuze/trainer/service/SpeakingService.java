@@ -9,9 +9,7 @@ import com.cloudfuze.trainer.entity.SpeakingSentence;
 import com.cloudfuze.trainer.entity.User;
 import com.cloudfuze.trainer.repository.SpeakingSentenceRepository;
 import com.cloudfuze.trainer.service.ai.AiService;
-import com.cloudfuze.trainer.service.ai.AzureSpeechService;
 import com.cloudfuze.trainer.service.ai.SpeakingEvaluation;
-import com.cloudfuze.trainer.service.ai.SpeechAssessment;
 import com.cloudfuze.trainer.util.JsonUtil;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -31,7 +29,6 @@ public class SpeakingService {
     private final SpeakingSetService speakingSetService;
     private final SessionService sessionService;
     private final AiService aiService;
-    private final AzureSpeechService azureSpeechService;
     private final JsonUtil json;
     private final AuditService auditService;
     private final com.cloudfuze.trainer.repository.SpeakingRecordingRepository recordingRepository;
@@ -39,7 +36,7 @@ public class SpeakingService {
     private final SpeakingSentenceRepository sentenceRepository;
 
     public SpeakingService(SpeakingSetService speakingSetService, SessionService sessionService,
-                           AiService aiService, AzureSpeechService azureSpeechService,
+                           AiService aiService,
                            JsonUtil json, AuditService auditService,
                            com.cloudfuze.trainer.repository.SpeakingRecordingRepository recordingRepository,
                            com.cloudfuze.trainer.repository.AssessmentSessionRepository sessionRepository,
@@ -47,7 +44,6 @@ public class SpeakingService {
         this.speakingSetService = speakingSetService;
         this.sessionService = sessionService;
         this.aiService = aiService;
-        this.azureSpeechService = azureSpeechService;
         this.json = json;
         this.auditService = auditService;
         this.recordingRepository = recordingRepository;
@@ -55,7 +51,7 @@ public class SpeakingService {
         this.sentenceRepository = sentenceRepository;
     }
 
-    /** Scores one spoken sentence via Azure → OpenAI-audio → transcript fallback. */
+    /** Scores one spoken sentence: transcribe the recording, then grade that transcript. */
     private SpeakingDtos.SpeechItem scoreSentence(SpeakingDtos.SpeechResultInput input) {
         // Never trust the client's "expected" text — resolve the reference sentence from
         // the database by id, so a caller can't send expected == transcript for a perfect
@@ -64,38 +60,22 @@ public class SpeakingService {
                 .map(SpeakingSentence::getText)
                 .orElse("");
         String transcript = input.transcript() == null ? "" : input.transcript();
-        SpeakingEvaluation eval = null;
 
         byte[] audio = decodeAudio(input.audioBase64());
-        if (audio != null && azureSpeechService.isEnabled()) {
-            SpeechAssessment a = azureSpeechService.assess(audio, expected);
-            if (a != null) {
-                eval = fromAzure(a);
-                if (a.recognizedText() != null && !a.recognizedText().isBlank()) {
-                    transcript = a.recognizedText();
-                }
-            }
-        }
         // Transcribe the recording server-side. This is the ONLY text that may be shown back to
         // anyone: the client transcript comes from the browser's Web Speech API, which drops the
         // opening words while the mic is still coming up, is Chrome-only, and can be set to
         // anything by whoever calls the endpoint. It exists so the candidate sees something
         // while they speak, and for nothing else.
-        String heard = null;
-        boolean transcriptionFailed = false;
-        if (eval == null && audio != null) {
-            heard = aiService.transcribe(audio);
-            transcriptionFailed = heard == null;
-        }
+        String heard = audio == null ? null : aiService.transcribe(audio);
+        boolean transcriptionFailed = audio != null && heard == null;
         if (heard != null && !heard.isBlank()) {
             transcript = heard;
         }
-        if (eval == null) {
-            // Scoring still falls back to the client transcript when transcription could not
-            // run, so an OpenAI outage cannot zero a candidate's section for something outside
-            // their control. Feedback shows "could not be processed" instead of that text.
-            eval = aiService.scoreSpeaking(expected, transcript);
-        }
+        // Scoring still falls back to the client transcript when transcription could not run, so
+        // an OpenAI outage cannot zero a candidate's section for something outside their control.
+        // Feedback shows "could not be processed" instead of that text.
+        SpeakingEvaluation eval = aiService.scoreSpeaking(expected, transcript);
         // Never hand back the browser's text. Empty + transcriptionFailed reads as "we could not
         // process your recording"; empty on its own still reads as "no speech detected".
         String shown = transcriptionFailed ? "" : transcript;
@@ -200,19 +180,4 @@ public class SpeakingService {
         }
     }
 
-    /** Maps Azure pronunciation scores onto the app's speaking rubric. */
-    private SpeakingEvaluation fromAzure(SpeechAssessment a) {
-        double round = 10.0;
-        double pronunciation = Math.round(a.accuracy() * round) / round;   // phoneme accuracy
-        double fluency = Math.round(a.fluency() * round) / round;
-        double accuracy = Math.round(a.completeness() * round) / round;      // said the whole sentence
-        double overall = Math.round(a.pronunciation() * round) / round;      // Azure calibrated overall
-        List<String> tips = new ArrayList<>();
-        if (a.accuracy() < 80) tips.add("Focus on clearer pronunciation of each word.");
-        if (a.fluency() < 80) tips.add("Speak more smoothly, with fewer pauses.");
-        if (a.completeness() < 90) tips.add("Say the complete sentence — some words were missed.");
-        if (tips.isEmpty()) tips.add("Excellent spoken delivery.");
-        return new SpeakingEvaluation(pronunciation, accuracy, fluency, pronunciation, pronunciation,
-                fluency, overall, tips);
-    }
 }

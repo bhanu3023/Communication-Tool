@@ -45,8 +45,6 @@ services:
       # Speech-to-text for the speaking section. Unset it and scoring silently falls back to
       # the browser transcript, which is exactly what we moved away from.
       OPENAI_TRANSCRIBE_MODEL: ${OPENAI_TRANSCRIBE_MODEL:-whisper-1}
-      AZURE_SPEECH_KEY: ${AZURE_SPEECH_KEY:-}
-      AZURE_SPEECH_REGION: ${AZURE_SPEECH_REGION:-}
     ports:
       - "8080:8080"
 

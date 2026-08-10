@@ -19,7 +19,7 @@ docs/ARCHITECTURE.md
 | Config | `config/SecurityConfig.java`, `config/AiConfig.java`, `config/OpenApiConfig.java` |
 | Auth (Azure→JWT) | `security/AzureTokenVerifier`, `security/JwtService`, `security/JwtAuthenticationFilter`, `security/AppPrincipal`, `security/CurrentUser`; `service/AuthService`; `controller/AuthController` |
 | Assessments | `controller/{Listening,Speaking,Writing}Controller` → `service/{Listening,Speaking,Writing}Service` (+ `SpeakingSetService`) |
-| AI facade | `service/ai/AiService`, `OpenAiClient`, `MockAiEvaluator`, `AzureSpeechService`, and result records (`SpeakingEvaluation`, `WritingEvaluation`, `SpeechAssessment`, `ListeningSummary`, `OverallFeedback`, `AiDetection`) |
+| AI facade | `service/ai/AiService`, `OpenAiClient`, `MockAiEvaluator`, and result records (`SpeakingEvaluation`, `WritingEvaluation`, `ListeningSummary`, `OverallFeedback`, `AiDetection`) |
 | Sessions/scoring | `entity/AssessmentSession`, `entity/SectionResult`; `service/SessionService`, `service/AttemptService`, `service/AttemptPolicy`, `entity/SectionAttemptControl`; `service/AttemptDetailService` |
 | Manager/reporting | `controller/ManagerController` → `service/ManagerService`; `service/PdfService`; `service/DashboardService`; `entity/ManagerComment` |
 | Proctoring | `controller/ProctorController` → `service/ProctorService`; `entity/ProctorEvent` |
