@@ -105,12 +105,13 @@ public class AiService {
     }
 
     /**
-     * Transcribes recorded speech server-side, or {@code null} when transcription is
-     * unavailable so the caller can fall back to the client-supplied transcript.
+     * Transcribes recorded speech server-side. The returned {@link Transcription} says whether
+     * the recording was actually assessed, so the caller can tell "they said nothing" apart from
+     * "we could not check" — only the latter may fall back to the client-supplied transcript.
      *
      * @param wav raw WAV bytes as stored for the sentence
      */
-    public String transcribe(byte[] wav) {
+    public Transcription transcribe(byte[] wav) {
         return openAi.transcribe(wav);
     }
 

@@ -14,6 +14,7 @@ import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientResponseException;
 
 import java.time.Duration;
 import java.util.List;
@@ -106,9 +107,14 @@ public class OpenAiClient {
      *
      * @param wav raw WAV bytes (16 kHz mono as produced by the recorder)
      */
-    public String transcribe(byte[] wav) {
-        if (!isEnabled() || !StringUtils.hasText(transcribeModel) || wav == null || wav.length == 0) {
-            return null;
+    public Transcription transcribe(byte[] wav) {
+        if (!isEnabled() || !StringUtils.hasText(transcribeModel)) {
+            return Transcription.unavailable();
+        }
+        if (wav == null || wav.length == 0) {
+            // Nothing was submitted for this sentence. That is the candidate's recording, not an
+            // outage, so it must not earn the benefit of the client-transcript fallback.
+            return Transcription.unusableAudio();
         }
         try {
             MultiValueMap<String, Object> form = new LinkedMultiValueMap<>();
@@ -133,10 +139,28 @@ public class OpenAiClient {
                     .body(JsonNode.class);
 
             String text = response == null ? null : response.path("text").asText(null);
-            return StringUtils.hasText(text) ? text.trim() : null;
+            // A 200 with no words means the clip was assessed and nothing was said. That is an
+            // answer, not a failure, so it must not fall back to the client transcript either.
+            return Transcription.ok(text);
+        } catch (RestClientResponseException e) {
+            int status = e.getStatusCode().value();
+            // 400 is OpenAI refusing the audio itself — wrong format, corrupt, undecodable.
+            // Verified: posting junk bytes returns 400 "Invalid file format". Everything else
+            // in the 4xx range is our problem, not the candidate's: 401 a bad key, 404 a
+            // misconfigured model, 429 our rate limit.
+            if (status == 400) {
+                log.warn("OpenAI rejected the audio as unusable, scoring it as nothing spoken: {}",
+                        e.getMessage());
+                return Transcription.unusableAudio();
+            }
+            log.warn("OpenAI transcription unavailable ({}), falling back to the client transcript: {}",
+                    status, e.getMessage());
+            return Transcription.unavailable();
         } catch (Exception e) {
-            log.warn("OpenAI transcription failed, falling back to the client transcript: {}", e.getMessage());
-            return null;
+            // Timeouts, DNS, connection resets — all outside the candidate's control.
+            log.warn("OpenAI transcription unavailable, falling back to the client transcript: {}",
+                    e.getMessage());
+            return Transcription.unavailable();
         }
     }
 

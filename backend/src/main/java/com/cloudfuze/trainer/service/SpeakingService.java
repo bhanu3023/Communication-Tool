@@ -10,6 +10,7 @@ import com.cloudfuze.trainer.entity.User;
 import com.cloudfuze.trainer.repository.SpeakingSentenceRepository;
 import com.cloudfuze.trainer.service.ai.AiService;
 import com.cloudfuze.trainer.service.ai.SpeakingEvaluation;
+import com.cloudfuze.trainer.service.ai.Transcription;
 import com.cloudfuze.trainer.util.JsonUtil;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -67,14 +68,18 @@ public class SpeakingService {
         // opening words while the mic is still coming up, is Chrome-only, and can be set to
         // anything by whoever calls the endpoint. It exists so the candidate sees something
         // while they speak, and for nothing else.
-        String heard = audio == null ? null : aiService.transcribe(audio);
-        boolean transcriptionFailed = audio != null && heard == null;
-        if (heard != null && !heard.isBlank()) {
-            transcript = heard;
+        Transcription heard = aiService.transcribe(audio);
+        if (heard.assessed()) {
+            // The recording was checked. Whatever it was heard to say IS the answer — including
+            // nothing at all. Falling back here would score the client's transcript, which the
+            // caller controls, so unusable audio plus a perfect transcript would be full marks
+            // without speaking.
+            transcript = heard.text();
         }
-        // Scoring still falls back to the client transcript when transcription could not run, so
-        // an OpenAI outage cannot zero a candidate's section for something outside their control.
-        // Feedback shows "could not be processed" instead of that text.
+        // Only a failure on our side — no key, rate limit, timeout, a 5xx — may fall back to the
+        // transcript the browser sent, so an outage cannot zero a candidate for something
+        // outside their control. Feedback shows "could not be processed" rather than that text.
+        boolean transcriptionFailed = heard.status() == Transcription.Status.UNAVAILABLE;
         SpeakingEvaluation eval = aiService.scoreSpeaking(expected, transcript);
         // Never hand back the browser's text. Empty + transcriptionFailed reads as "we could not
         // process your recording"; empty on its own still reads as "no speech detected".
