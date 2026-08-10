@@ -280,7 +280,7 @@ export default function Listening() {
             Listening Complete
           </Typography>
           <Box sx={{ my: 2 }}>
-            <ScoreGauge score={result.score} label="Listening Score" />
+            <ScoreGauge score={result.score} label="Listening Score" passMark={passMark} />
           </Box>
           <Chip
             color={result.score >= passMark ? 'success' : 'error'}

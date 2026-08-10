@@ -525,7 +525,7 @@ export default function Speaking() {
               Speaking Complete
             </Typography>
             <Box sx={{ my: 2 }}>
-              <ScoreGauge score={result.score} label="Speaking Score" />
+              <ScoreGauge score={result.score} label="Speaking Score" passMark={passMark} />
             </Box>
             <Chip
               color={result.score >= passMark ? 'success' : 'error'}

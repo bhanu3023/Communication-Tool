@@ -321,7 +321,7 @@ export default function Writing() {
         <Card sx={{ mb: 2 }}>
           <CardContent sx={{ textAlign: 'center', p: 4 }}>
             <Typography variant="h5" gutterBottom>Writing Complete</Typography>
-            <Box sx={{ my: 2 }}><ScoreGauge score={result.score} label="Writing Score" /></Box>
+            <Box sx={{ my: 2 }}><ScoreGauge score={result.score} label="Writing Score" passMark={passMark} /></Box>
             <Chip
               color={result.score >= passMark ? 'success' : 'error'}
               label={result.score >= passMark
