@@ -76,10 +76,37 @@ public class AiService {
         double grammar = num(node, "grammar");
         double vocabulary = num(node, "vocabulary");
         double confidence = num(node, "confidence");
-        double overall = round(pronunciation * 0.30 + accuracy * 0.25 + fluency * 0.20
-                + grammar * 0.10 + vocabulary * 0.10 + confidence * 0.05);
+        double overall = weightedOverall(pronunciation, accuracy, fluency, grammar, vocabulary, confidence);
         return new SpeakingEvaluation(round(pronunciation), round(accuracy), round(fluency),
                 round(grammar), round(vocabulary), round(confidence), overall, strings(node, "suggestions"));
+    }
+
+    /**
+     * Combines the six sub-scores into the section score.
+     *
+     * <p>The weighting follows what can actually be evidenced. Pronunciation, fluency and
+     * confidence cannot be judged from a transcript, so the examiner prompt holds them at a
+     * neutral estimate near 70 — and while they carried 55% of the grade between them, that
+     * constant capped a FLAWLESS answer at about 83.5. Level 2 passes at 80, so a perfect
+     * candidate cleared it by 3.5 points and a single misheard word failed them. The bar was not
+     * strict, it was barely reachable.
+     *
+     * <p>Weight now sits on accuracy — did they say the target's words — with grammar and
+     * vocabulary secondary, and the three unmeasurable dimensions kept at a token 10% so they
+     * still appear in feedback without deciding the outcome. A flawless answer now scores about
+     * 97, so 75 and 80 become real bars rather than near-impossible ones.
+     *
+     * <p>If real pronunciation scoring is ever restored (it needs a service that hears the
+     * voice), these weights should move back toward the original rubric.
+     */
+    static double weightedOverall(double pronunciation, double accuracy, double fluency,
+                                  double grammar, double vocabulary, double confidence) {
+        return round(accuracy * 0.60
+                + grammar * 0.15
+                + vocabulary * 0.15
+                + pronunciation * 0.05
+                + fluency * 0.03
+                + confidence * 0.02);
     }
 
     /**
@@ -156,8 +183,7 @@ public class AiService {
         double grammar = num(node, "grammar");
         double vocabulary = num(node, "vocabulary");
         double confidence = num(node, "confidence");
-        double overall = round(pronunciation * 0.30 + accuracy * 0.25 + fluency * 0.20
-                + grammar * 0.10 + vocabulary * 0.10 + confidence * 0.05);
+        double overall = weightedOverall(pronunciation, accuracy, fluency, grammar, vocabulary, confidence);
         return new SpeakingEvaluation(round(pronunciation), round(accuracy), round(fluency),
                 round(grammar), round(vocabulary), round(confidence), overall, strings(node, "suggestions"));
     }
@@ -328,7 +354,8 @@ public class AiService {
         return out;
     }
 
-    private double round(double v) {
+    /** Clamps to 0-100 and rounds to one decimal. Static so weightedOverall can share it. */
+    private static double round(double v) {
         return Math.round(Math.max(0, Math.min(100, v)) * 10.0) / 10.0;
     }
 }

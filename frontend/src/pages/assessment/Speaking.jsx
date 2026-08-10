@@ -39,6 +39,7 @@ import { useAudioRecorder } from '../../hooks/useAudioRecorder';
 import { useExamMode } from '../../hooks/useExamMode';
 import { recordViolation, startSpeaking, submitSpeaking } from '../../services/assessmentService';
 import { useToast } from '../../contexts/ToastContext';
+import { levelRules } from '../../utils/levels';
 
 // Recording PLAYBACK on the results screen is temporarily disabled (per request).
 // The audio is still recorded and sent to the backend so the ACTUAL voice is evaluated
@@ -61,6 +62,9 @@ export default function Speaking() {
   // from /start for that level.
   const [searchParams] = useSearchParams();
   const level = Number(searchParams.get('level')) === 2 ? 2 : 1;
+  // The pass mark differs per level (75 / 80). This screen hardcoded 75, so a Level 2
+  // candidate on 77 was congratulated and then found the section still failed.
+  const passMark = levelRules(level).passMark;
   // Every exit from a Level 2 test returns to the Level 2 portal, never to Level 1.
   const homePath = level === 2 ? '/level-2' : '/dashboard';
   const hubPath = level === 2 ? '/level-2' : '/assessment';
@@ -494,7 +498,8 @@ export default function Speaking() {
 
   if (phase === 'result' && result) {
     const items = result.details?.items || [];
-    const scoreColor = (v) => (v >= 75 ? 'success' : 'error'); // pass mark 75: green/red only
+    // Green/red against THIS level's bar, not a fixed 75 — at Level 2 a 77 is not a pass.
+    const scoreColor = (v) => (v >= passMark ? 'success' : 'error');
     const DIMENSIONS = [
       ['Pronunciation', 'pronunciation'],
       ['Fluency', 'fluency'],
@@ -523,8 +528,10 @@ export default function Speaking() {
               <ScoreGauge score={result.score} label="Speaking Score" />
             </Box>
             <Chip
-              color={result.score >= 75 ? 'success' : 'error'}
-              label={result.score >= 75 ? 'Passed ✓ (pass mark 75)' : 'Below the 75 pass mark'}
+              color={result.score >= passMark ? 'success' : 'error'}
+              label={result.score >= passMark
+                  ? `Passed ✓ (pass mark ${passMark})`
+                  : `Below the ${passMark} pass mark`}
               sx={{ mb: 1, fontWeight: 700 }}
             />
 

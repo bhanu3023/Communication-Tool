@@ -18,7 +18,7 @@
   `@SpringBootTest`/`@WebMvcTest` for slices.
 - **Prioritize the deterministic core first** (no network, no OpenAI):
   - Scoring math: Listening MCQ (10/correct, max 100), Speaking weighted rubric
-    (pron 30 / acc 25 / flu 20 / gram 10 / vocab 10 / conf 5), Writing 10-dimension average,
+    (acc 60 / gram 15 / vocab 15 / pron 5 / flu 3 / conf 2 — weight sits on what a transcript can evidence), Writing 10-dimension average,
     overall = mean of sections, weak area = lowest section. See `.claude/memory/domain-knowledge.md`.
   - `MockAiEvaluator` output shape and stability (it must stay deterministic).
   - `AttemptPolicy` / attempt limits, section pass mark (75) and pass/fail status.

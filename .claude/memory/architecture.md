@@ -31,7 +31,7 @@ Three assessment modules (Listening / Speaking / Writing), each: controller `/ap
 
 ## Scoring (see [[domain-knowledge]])
 - Listening: MCQ, 10/correct (max 100), deterministic AI summary.
-- Speaking: weighted rubric pron 30 / acc 25 / flu 20 / gram 10 / vocab 10 / conf 5; section = average.
+- Speaking: weighted rubric acc 60 / gram 15 / vocab 15 / pron 5 / flu 3 / conf 2; section = average. Pronunciation, fluency and confidence cannot be heard from a transcript, so they are held near 70 and carry token weight.
 - Writing: 10-dimension rubric average + mistakes/suggestions/improved version.
 - Weak area = lowest section; **pass mark = 75** per section (pass/fail status). NB: README says
   "overall = mean of sections" but the code does not compute a numeric combined score — sections are

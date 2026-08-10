@@ -39,9 +39,10 @@ public class MockAiEvaluator {
         double fluency = accuracy * (0.6 + 0.4 * lengthRatio);
         double confidence = accuracy * (0.7 + 0.3 * lengthRatio);
 
-        double overall = round(
-                pronunciation * 0.30 + accuracy * 0.25 + fluency * 0.20
-                        + grammar * 0.10 + vocabulary * 0.10 + confidence * 0.05);
+        // Same weighting as the real evaluator, so a quota lapse cannot silently change how
+        // hard the test is. See AiService.weightedOverall for why accuracy carries it.
+        double overall = AiService.weightedOverall(
+                pronunciation, accuracy, fluency, grammar, vocabulary, confidence);
 
         List<String> suggestions = new ArrayList<>();
         if (accuracy < 50) suggestions.add("Your response did not match the sentence. Repeat it word for word.");
