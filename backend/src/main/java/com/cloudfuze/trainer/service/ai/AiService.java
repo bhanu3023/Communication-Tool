@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -51,9 +52,11 @@ public class AiService {
         }
         JsonNode node = openAi.completeJson(
                 "You are a STRICT but fair spoken-English examiner scoring a REPETITION task from an ASR "
-                        + "transcript. The transcript comes from automatic speech recognition, which normalizes "
-                        + "numbers (\"twenty percent\" -> \"20%\"), drops capitalization/punctuation, and makes "
-                        + "minor homophone slips — treat THOSE artifacts as CORRECT and never penalize them. "
+                        + "transcript. Both texts below have already been lowercased with punctuation stripped, "
+                        + "so there is nothing to judge there. The transcript comes from automatic speech "
+                        + "recognition, which normalizes numbers (\"twenty percent\" -> \"20%\"), invents its own "
+                        + "sentence breaks, and makes minor homophone slips — treat THOSE artifacts as CORRECT and "
+                        + "never penalize them. "
                         + "However, DO penalize genuinely missing, added, or wrong CONTENT words versus the target. "
                         + "Use the full 0-100 range and do not inflate. Score 0-100: accuracy = how completely the "
                         + "target's words and meaning were reproduced (missing content words lower it sharply); "
@@ -62,7 +65,8 @@ public class AiService {
                         + "(about 60-75) and NEVER award 90+ for these on transcript alone. Return JSON numeric "
                         + "fields (0-100): pronunciation, accuracy, fluency, grammar, vocabulary, confidence, and a "
                         + "'suggestions' array of 1-3 short, specific tips.",
-                "Target sentence: \"" + expected + "\"\nRecognized transcript: \"" + transcript + "\"");
+                "Target sentence: \"" + forComparison(expected) + "\"\n"
+                        + "Recognized transcript: \"" + forComparison(transcript) + "\"");
         if (node == null) {
             return mock.scoreSpeaking(expected, transcript);
         }
@@ -76,6 +80,28 @@ public class AiService {
                 + grammar * 0.10 + vocabulary * 0.10 + confidence * 0.05);
         return new SpeakingEvaluation(round(pronunciation), round(accuracy), round(fluency),
                 round(grammar), round(vocabulary), round(confidence), overall, strings(node, "suggestions"));
+    }
+
+    /**
+     * Lowercased, punctuation-free form used ONLY when comparing a spoken answer to its target.
+     *
+     * <p>A candidate cannot pronounce a comma, so they must not lose marks for one. Whisper
+     * writes its own punctuation and sentence breaks, so "Fantastic, data moved!" came back as
+     * "Fantastic. Data moved." and the examiner model docked accuracy for the difference —
+     * purely an artifact of the transcriber. Normalising both sides removes the signal instead
+     * of asking the model to overlook it. Never use this for anything shown to a user: feedback
+     * quotes the transcript as it was heard.
+     */
+    private static String forComparison(String text) {
+        if (text == null) {
+            return "";
+        }
+        return text.toLowerCase(Locale.ROOT)
+                // Keep letters, digits and spaces; anything else becomes a space so that
+                // "well-managed" reads as two words rather than collapsing into one.
+                .replaceAll("[^\\p{IsAlphabetic}\\p{IsDigit}]", " ")
+                .replaceAll("\\s+", " ")
+                .trim();
     }
 
     /**
