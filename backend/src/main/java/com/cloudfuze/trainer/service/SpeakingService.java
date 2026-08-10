@@ -76,10 +76,15 @@ public class SpeakingService {
                 }
             }
         }
-        if (eval == null) {
-            String rawB64 = rawBase64(input.audioBase64());
-            if (rawB64 != null) {
-                eval = aiService.scoreSpeakingFromAudio(expected, rawB64);
+        // Transcribe the recording server-side and prefer that over whatever the browser heard.
+        // The client transcript comes from the Web Speech API, which drops the opening words
+        // while the mic is still coming up, is Chrome-only, and is trivially forgeable. This is
+        // what makes the candidate's actual audio decide their score rather than just be stored
+        // alongside it. Falls back to the client transcript when transcription is unavailable.
+        if (eval == null && audio != null) {
+            String recognised = aiService.transcribe(audio);
+            if (recognised != null && !recognised.isBlank()) {
+                transcript = recognised;
             }
         }
         if (eval == null) {

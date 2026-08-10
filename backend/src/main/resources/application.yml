@@ -37,7 +37,13 @@ app:
   openai:
     api-key: ${OPENAI_API_KEY:}
     model: ${OPENAI_MODEL:gpt-4o-mini}
-    audio-model: ${OPENAI_AUDIO_MODEL:gpt-4o-mini-audio-preview}
+    # This default is the one that actually applies — it wins over the @Value fallback in
+    # OpenAiClient, because that reads this property. gpt-4o-mini-audio-preview 404s on our
+    # account. Note the audio-model path is not used for scoring; see AiService.transcribe.
+    audio-model: ${OPENAI_AUDIO_MODEL:gpt-audio-mini}
+    # Speech-to-text for the speaking section: the recording is transcribed here rather than
+    # trusting whatever the browser's Web Speech API heard.
+    transcribe-model: ${OPENAI_TRANSCRIBE_MODEL:whisper-1}
     base-url: ${OPENAI_BASE_URL:https://api.openai.com/v1}
   azure-speech:
     # Azure AI Speech (Cognitive Services) resource — enables real voice pronunciation scoring.

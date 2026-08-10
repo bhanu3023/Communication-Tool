@@ -79,9 +79,26 @@ public class AiService {
     }
 
     /**
+     * Transcribes recorded speech server-side, or {@code null} when transcription is
+     * unavailable so the caller can fall back to the client-supplied transcript.
+     *
+     * @param wav raw WAV bytes as stored for the sentence
+     */
+    public String transcribe(byte[] wav) {
+        return openAi.transcribe(wav);
+    }
+
+    /**
      * Scores speaking from the actual recorded audio using OpenAI's audio model.
      * Returns null if audio scoring is unavailable (no key / error) so the caller
      * can fall back to transcript-based scoring.
+     *
+     * <p><strong>Currently unused.</strong> gpt-audio-mini and gpt-audio accept an input_audio
+     * part and answer 200, but the audio never reaches the model — asked only to transcribe,
+     * both reply "please provide the audio" — so this returned prose instead of JSON and every
+     * sentence fell through to transcript scoring anyway. {@link #transcribe} replaced it in the
+     * scoring path. Kept because the call is correct per the API docs and costs nothing while
+     * uncalled; re-enable it if OpenAI ships working audio input on chat completions.
      */
     public SpeakingEvaluation scoreSpeakingFromAudio(String expected, String base64Wav) {
         JsonNode node = openAi.completeJsonWithAudio(

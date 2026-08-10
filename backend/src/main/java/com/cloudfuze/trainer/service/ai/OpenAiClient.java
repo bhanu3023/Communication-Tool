@@ -7,8 +7,11 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.web.client.ClientHttpRequestFactories;
 import org.springframework.boot.web.client.ClientHttpRequestFactorySettings;
+import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
+import org.springframework.util.LinkedMultiValueMap;
+import org.springframework.util.MultiValueMap;
 import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestClient;
 
@@ -28,6 +31,7 @@ public class OpenAiClient {
     private final String apiKey;
     private final String model;
     private final String audioModel;
+    private final String transcribeModel;
     private final RestClient restClient;
     private final ObjectMapper mapper = new ObjectMapper();
 
@@ -36,10 +40,12 @@ public class OpenAiClient {
                         // gpt-4o-audio-preview 404s on our account; an unset variable therefore
                         // disabled audio scoring silently. See docker-compose.yml.
                         @Value("${app.openai.audio-model:gpt-audio-mini}") String audioModel,
+                        @Value("${app.openai.transcribe-model:whisper-1}") String transcribeModel,
                         @Value("${app.openai.base-url:https://api.openai.com/v1}") String baseUrl) {
         this.apiKey = apiKey;
         this.model = model;
         this.audioModel = audioModel;
+        this.transcribeModel = transcribeModel;
         // Bound every OpenAI call so a slow/hung API can't tie up request threads
         // indefinitely — on timeout the call throws and the caller falls back to mock.
         ClientHttpRequestFactorySettings settings = ClientHttpRequestFactorySettings.DEFAULTS
@@ -84,6 +90,52 @@ public class OpenAiClient {
             return content == null ? null : mapper.readTree(content);
         } catch (Exception e) {
             log.warn("OpenAI call failed, falling back to mock evaluator: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Transcribes a WAV clip with the speech-to-text endpoint and returns the recognised text,
+     * or {@code null} on any error so the caller can fall back.
+     *
+     * This is what makes the candidate's actual recording drive their score. The chat-completions
+     * audio path below does not: gpt-audio-mini and gpt-audio accept an input_audio part and
+     * answer 200, but the audio never reaches the model — asked only to transcribe, both reply
+     * "please provide the audio". Because they answer in prose rather than JSON, parsing failed
+     * and every sentence silently fell back to whatever the browser's Web Speech API had heard.
+     *
+     * @param wav raw WAV bytes (16 kHz mono as produced by the recorder)
+     */
+    public String transcribe(byte[] wav) {
+        if (!isEnabled() || !StringUtils.hasText(transcribeModel) || wav == null || wav.length == 0) {
+            return null;
+        }
+        try {
+            MultiValueMap<String, Object> form = new LinkedMultiValueMap<>();
+            form.add("model", transcribeModel);
+            // Whisper picks the decoder from the filename extension, so it must say .wav.
+            form.add("file", new ByteArrayResource(wav) {
+                @Override
+                public String getFilename() {
+                    return "speech.wav";
+                }
+            });
+            // The candidates speak Indian English; naming the language stops the model
+            // guessing another one from a short or noisy clip.
+            form.add("language", "en");
+
+            JsonNode response = restClient.post()
+                    .uri("/audio/transcriptions")
+                    .header("Authorization", "Bearer " + apiKey)
+                    .contentType(MediaType.MULTIPART_FORM_DATA)
+                    .body(form)
+                    .retrieve()
+                    .body(JsonNode.class);
+
+            String text = response == null ? null : response.path("text").asText(null);
+            return StringUtils.hasText(text) ? text.trim() : null;
+        } catch (Exception e) {
+            log.warn("OpenAI transcription failed, falling back to the client transcript: {}", e.getMessage());
             return null;
         }
     }
