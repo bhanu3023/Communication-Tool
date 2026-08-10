@@ -7,6 +7,7 @@ import {
   Card,
   CardContent,
   Chip,
+  CircularProgress,
   Divider,
   Grid,
   LinearProgress,
@@ -64,8 +65,15 @@ export default function Speaking() {
   const homePath = level === 2 ? '/level-2' : '/dashboard';
   const hubPath = level === 2 ? '/level-2' : '/assessment';
   const { showToast } = useToast();
-  const { supported, transcript, error: speechError, start: startMic, stop: stopMic, setTranscript } =
-    useSpeechRecognition();
+  const {
+    supported,
+    transcript,
+    transcriptRef,
+    error: speechError,
+    start: startMic,
+    stop: stopMic,
+    setTranscript,
+  } = useSpeechRecognition();
   const tts = useSpeechSynthesis();
   const mic = useMicMeter();
   const recorder = useAudioRecorder();
@@ -77,13 +85,16 @@ export default function Speaking() {
   const [result, setResult] = useState(null);
   const resultsRef = useRef({}); // sentenceId -> { transcript, audio }
   const recordingIdRef = useRef(null);
-  const transcriptRef = useRef('');
-  transcriptRef.current = transcript;
+  // transcriptRef comes from the hook and is updated inside onresult. It used to be assigned
+  // during render from the `transcript` state, which meant a candidate who pressed Next
+  // straight after their last word saved a transcript missing that word.
   const submittingRef = useRef(false);
   const [submitting, setSubmitting] = useState(false);
   // How many times each sentence has been recorded: 0, 1, or 2 (1 original + 1 re-record).
   const [recordCounts, setRecordCounts] = useState({});
   const [isRecording, setIsRecording] = useState(false);
+  // Mic and recognizer are coming up but are not capturing yet — the candidate must not speak.
+  const [preparing, setPreparing] = useState(false);
   const MAX_RECORDINGS = 2; // original attempt + one re-record
 
   // Audio is always captured (for playback + storage). Note: running the recorder
@@ -94,22 +105,41 @@ export default function Speaking() {
   const recordCount = current ? recordCounts[current.id] || 0 : 0;
 
   // Start (or re-start) capturing. Allowed up to MAX_RECORDINGS times per sentence.
-  const startRecording = () => {
-    if (!current || isRecording || (recordCounts[current.id] || 0) >= MAX_RECORDINGS) return;
+  //
+  // Both capture paths are awaited before the UI says we are recording. Neither is instant --
+  // the recorder awaits getUserMedia and the recognizer needs the engine to come up -- and
+  // announcing "Recording" first is what made the opening words of a sentence go missing. It
+  // hurt the first sentence worst, where the permission prompt and a cold engine land together.
+  const startRecording = async () => {
+    if (!current || isRecording || preparing || (recordCounts[current.id] || 0) >= MAX_RECORDINGS) {
+      return;
+    }
     recordingIdRef.current = current.id;
     setTranscript(''); // fresh transcript for this take (a re-record replaces the previous one)
-    setIsRecording(true);
-    if (supported) startMic();
-    // Always capture the audio so the candidate can replay each sentence later.
-    if (recorder.supported) recorder.start();
+    setPreparing(true);
+    try {
+      await Promise.all([
+        supported ? startMic() : Promise.resolve(),
+        // Always capture the audio so the candidate can replay each sentence later.
+        recorder.supported ? recorder.start() : Promise.resolve(),
+      ]);
+    } finally {
+      setPreparing(false);
+      setIsRecording(true);
+    }
   };
 
   // Stop and persist the current take (a re-record overwrites the previous take).
   const finalizeRecording = useCallback(async () => {
     const id = recordingIdRef.current;
-    const audio = recorder.supported ? await recorder.stop() : null;
-    stopMic();
+    // Stop the recognizer FIRST. It used to be stopped after the audio was decoded and
+    // re-encoded, which left it listening for the whole of that work -- so anything said after
+    // pressing Next, including someone else talking, landed in this sentence's transcript.
+    // stop() also resolves only once the engine has delivered its final result, so awaiting it
+    // keeps the closing words.
+    await stopMic();
     setIsRecording(false);
+    const audio = recorder.supported ? await recorder.stop() : null;
     if (id != null) {
       resultsRef.current[id] = {
         transcript: transcriptRef.current || '',
@@ -118,7 +148,7 @@ export default function Speaking() {
       setRecordCounts((prev) => ({ ...prev, [id]: (prev[id] || 0) + 1 }));
     }
     recordingIdRef.current = null;
-  }, [recorder, stopMic]);
+  }, [recorder, stopMic, transcriptRef]);
 
   // Too many fullscreen exits ends the exam.
   const endExam = useCallback(() => {
@@ -652,7 +682,13 @@ export default function Speaking() {
           </Typography>
 
           <Stack direction="row" alignItems="center" spacing={1.5} sx={{ mb: 2 }}>
-            {isRecording ? (
+            {preparing ? (
+              // Deliberately not "Recording": the mic is not capturing yet, and telling the
+              // candidate otherwise is what lost the opening words of a sentence.
+              <Button variant="contained" color="error" startIcon={<CircularProgress size={16} color="inherit" />} disabled>
+                Getting the mic ready…
+              </Button>
+            ) : isRecording ? (
               <Button variant="outlined" color="error" startIcon={<StopIcon />} onClick={finalizeRecording}>
                 Stop recording
               </Button>
@@ -671,11 +707,13 @@ export default function Speaking() {
             )}
             <Chip
               icon={recordCount >= 1 ? <CheckCircleIcon /> : <RecordVoiceOverIcon />}
-              color={isRecording ? 'error' : recordCount >= 1 ? 'success' : 'default'}
+              color={preparing ? 'warning' : isRecording ? 'error' : recordCount >= 1 ? 'success' : 'default'}
               label={
-                isRecording
-                  ? 'Listening…'
-                  : recordCount >= 2
+                preparing
+                  ? 'Wait — not capturing yet'
+                  : isRecording
+                    ? 'Listening…'
+                    : recordCount >= 2
                     ? 'Answer recorded (re-record used)'
                     : recordCount === 1
                       ? 'Answer recorded — you may re-record once'
@@ -688,7 +726,14 @@ export default function Speaking() {
             <Typography variant="caption" color="text.secondary">
               Recognized transcript
             </Typography>
-            <Typography>{transcript || (isRecording ? 'Listening… start speaking' : '—')}</Typography>
+            <Typography>
+              {transcript ||
+                (preparing
+                  ? 'Getting the mic ready — please wait before speaking…'
+                  : isRecording
+                    ? 'Listening… start speaking'
+                    : '—')}
+            </Typography>
             {speechError && (
               <Typography variant="caption" color="error" display="block" sx={{ mt: 1 }}>
                 Recognition error: {speechError}
