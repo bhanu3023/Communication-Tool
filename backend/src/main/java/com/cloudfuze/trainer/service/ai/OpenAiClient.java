@@ -33,7 +33,9 @@ public class OpenAiClient {
 
     public OpenAiClient(@Value("${app.openai.api-key:}") String apiKey,
                         @Value("${app.openai.model:gpt-4o-mini}") String model,
-                        @Value("${app.openai.audio-model:gpt-4o-audio-preview}") String audioModel,
+                        // gpt-4o-audio-preview 404s on our account; an unset variable therefore
+                        // disabled audio scoring silently. See docker-compose.yml.
+                        @Value("${app.openai.audio-model:gpt-audio-mini}") String audioModel,
                         @Value("${app.openai.base-url:https://api.openai.com/v1}") String baseUrl) {
         this.apiKey = apiKey;
         this.model = model;
@@ -88,7 +90,7 @@ public class OpenAiClient {
 
     /**
      * Sends a system prompt + user text + an audio clip to the audio-capable model
-     * (gpt-4o-audio-preview) and returns the parsed JSON response. The model can
+     * (gpt-audio-mini by default) and returns the parsed JSON response. The model can
      * "hear" the audio and judge pronunciation/fluency. Returns null on any error.
      *
      * @param base64Wav raw base64 (no data-URL prefix) of a WAV clip

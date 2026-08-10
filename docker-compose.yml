@@ -37,7 +37,11 @@ services:
       APP_SUPER_ADMIN_EMAILS: ${APP_SUPER_ADMIN_EMAILS:-abhinav.surattu@cloudfuze.com}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
-      OPENAI_AUDIO_MODEL: ${OPENAI_AUDIO_MODEL-gpt-4o-mini-audio-preview}
+      # gpt-4o-mini-audio-preview used to be the default here and 404s on our account, so an
+      # unset variable silently disabled audio scoring: the call fails, the code falls back to
+      # the browser transcript, and nothing surfaces the difference. Verified against the live
+      # key with the exact request completeJsonWithAudio sends.
+      OPENAI_AUDIO_MODEL: ${OPENAI_AUDIO_MODEL-gpt-audio-mini}
       AZURE_SPEECH_KEY: ${AZURE_SPEECH_KEY:-}
       AZURE_SPEECH_REGION: ${AZURE_SPEECH_REGION:-}
     ports:
