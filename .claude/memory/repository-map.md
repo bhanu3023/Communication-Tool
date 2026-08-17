@@ -42,7 +42,7 @@ docs/ARCHITECTURE.md
 | Manager | `pages/manager/{ManagerDashboard,EmployeeDetail}.jsx` |
 | Hooks | `hooks/{useCountdown,useAudioRecorder,useMicMeter,useSpeechRecognition,useSpeechSynthesis,useExamMode,useEscapeToEnd}.js` |
 | UI components | `components/{CircularTimer,AssessmentTimers,ScoreGauge,FeedbackPanel,ScoringScreen,AttemptReview,ExamWarningDialog,LockedVideo,LoadingScreen,BrandLogo}.jsx` |
-| Misc | `contexts/ToastContext.jsx`, `theme.js`, `utils/{format,fullscreen}.js`, `index.css` |
+| Misc | `contexts/ToastContext.jsx`, `theme.js`, `utils/{format,fullscreen,hotjar}.js`, `index.css` |
 
 ## Ops
 `backend/Dockerfile`, `frontend/Dockerfile` (+ `frontend/nginx.conf`), `docker-compose.yml`.

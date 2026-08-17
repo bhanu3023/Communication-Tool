@@ -111,7 +111,8 @@ Copy `.env.example` → `.env` and fill in values. Key vars (full list in `.env.
 `AZURE_TENANT_ID`, `AZURE_CLIENT_ID` (+ `VITE_` copies) — **required**; `APP_JWT_SECRET`,
 `APP_JWT_EXPIRATION_MINUTES`, `APP_CORS_ORIGINS`; `OPENAI_API_KEY` (+ `OPENAI_MODEL`,
 `OPENAI_AUDIO_MODEL`, `OPENAI_TRANSCRIBE_MODEL`) — optional (mock fallback);
-`APP_DEV_LOGIN_ENABLED`/`VITE_DEV_LOGIN` — keep `false` outside dev.
+`APP_DEV_LOGIN_ENABLED`/`VITE_DEV_LOGIN` — keep `false` outside dev;
+`VITE_HOTJAR_SITE_ID` — optional, enables Hotjar session recording (blank = disabled).
 
 ## Common Commands
 
@@ -231,3 +232,41 @@ Reading files, explaining code, small edits, typo fixes, one-file updates, basic
 ### Option 3 — Let Claude recommend
 
 If gstack installed → recommend between gstack workflow and normal approach. If gstack missing → recommend between installing gstack (for tasks that need it) or normal approach (for small tasks).
+## Keeping Claude Files in Sync (MANDATORY)
+
+The `.claude/` directory is the project's source of truth. It goes stale the
+moment code changes without a matching doc change. Whenever you modify code,
+you MUST update the affected Claude files in the SAME session/PR.
+
+### Sync triggers — if you touch X, update Y
+
+| You changed...                          | You MUST update...                                  |
+|-----------------------------------------|-----------------------------------------------------|
+| Folder structure / moved/added modules  | `.claude/memory/repository-map.md`                  |
+| New/changed API endpoint or response shape | `.claude/rules/api-conventions.md`, `.claude/memory/architecture.md` |
+| DB schema / collections / models        | `.claude/memory/architecture.md`, `domain-knowledge.md` |
+| Auth flow (JWT/OAuth) changes           | `.claude/memory/architecture.md`, `.claude/rules/security-rules.md` |
+| New env var / config                    | CLAUDE.md (Environment Variables), `settings.json`  |
+| New command / script in package.json    | CLAUDE.md (Common Commands)                         |
+| Naming/style convention change          | `.claude/rules/code-style.md`                       |
+| Testing setup / scaffold change         | `.claude/rules/testing-standard.md`, `skills/testing-patterns/SKILL.md` |
+| Architectural decision (why, not what)  | `.claude/memory/decisions.md` (append, never rewrite history) |
+| Completed a feature/milestone           | `.claude/memory/progress.md`                        |
+| New dependency added                    | CLAUDE.md (Tech Stack)                              |
+
+### Rules
+1. **Same-PR rule:** doc updates ship in the same PR as the code change. A PR
+   that changes behavior but not the relevant `.claude/` file is incomplete.
+2. **decisions.md is append-only:** record date, decision, reason, alternatives
+   rejected. Never edit past entries.
+3. **If unsure whether a doc is affected,** grep the `.claude/` dir for the
+   symbol/file you changed and update every hit.
+4. **Staleness check before finishing any task:** re-read the sync table above
+   and confirm each triggered file was updated. State explicitly:
+   "Claude files updated: <list>" or "No Claude files needed updating because <reason>."
+5. Keep updates minimal and factual — reflect the new reality, don't rewrite
+   whole files.
+
+### On session start
+If the last commit touched code but no `.claude/` file, flag it: the knowledge
+base may be stale. Offer to reconcile before proceeding.

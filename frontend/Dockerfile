@@ -9,12 +9,15 @@ ARG VITE_AZURE_CLIENT_ID
 ARG VITE_AZURE_REDIRECT_URI
 ARG VITE_DEV_LOGIN
 ARG VITE_SPEAKING_AUDIO
+# Hotjar site id. Unset = the snippet never loads (see src/utils/hotjar.js).
+ARG VITE_HOTJAR_SITE_ID
 ENV VITE_API_BASE_URL=$VITE_API_BASE_URL \
     VITE_AZURE_TENANT_ID=$VITE_AZURE_TENANT_ID \
     VITE_AZURE_CLIENT_ID=$VITE_AZURE_CLIENT_ID \
     VITE_AZURE_REDIRECT_URI=$VITE_AZURE_REDIRECT_URI \
     VITE_DEV_LOGIN=$VITE_DEV_LOGIN \
-    VITE_SPEAKING_AUDIO=$VITE_SPEAKING_AUDIO
+    VITE_SPEAKING_AUDIO=$VITE_SPEAKING_AUDIO \
+    VITE_HOTJAR_SITE_ID=$VITE_HOTJAR_SITE_ID
 
 # Copy .npmrc first so legacy-peer-deps applies during install (msal-react peer range
 # predates React 19). package-lock.json is copied when present for reproducible installs.

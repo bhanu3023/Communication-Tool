@@ -49,3 +49,22 @@ dependency, schema change, boundary exception, or naming/collision resolution.
 ### Dev-login bypass behind a flag
 - `APP_DEV_LOGIN_ENABLED` / `VITE_DEV_LOGIN` expose passwordless sign-in for seeded users; the
   endpoint only exists when enabled. **Must be `false`** outside local dev (security-critical).
+
+### Hotjar session recording (2026-08-17)
+- Third-party session recordings + heatmaps, loaded for EVERY signed-in user and identified by
+  name, email, role and team (`frontend/src/utils/hotjar.js`).
+- **Why:** a stated product requirement — the admin needs to see how members actually use the
+  portal. Recordings are viewed on hotjar.com, so there is nothing to gate inside the app;
+  "admin only" means only the admin holds the Hotjar login. Loading it for admins alone would
+  record only the admin, which is why it is not conditional on role.
+- **Alternative rejected:** surfacing the existing `audit_log` in an admin screen. It already
+  captures logins, section starts/submits, proctor warnings and admin actions, needs no third
+  party and no employee PII leaving the building — but it gives counts and timings, not
+  recordings of the actual interaction, which is what was asked for.
+- **Known cost, accepted deliberately:** employees are recorded while taking a graded
+  assessment, and their identity is sent to Hotjar. Flagged twice before implementing and
+  confirmed as a requirement. Unset `VITE_HOTJAR_SITE_ID` and nothing loads.
+- Baked at BUILD time like every `VITE_` var, so changing it needs an image rebuild. If a CSP
+  is ever added to `frontend/nginx.conf` (there is none today), `static.hotjar.com` and
+  Hotjar's script/websocket origins must be allowed or recording silently stops.
+

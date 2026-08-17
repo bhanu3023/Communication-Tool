@@ -56,6 +56,9 @@ services:
         VITE_AZURE_TENANT_ID: ${VITE_AZURE_TENANT_ID}
         VITE_AZURE_CLIENT_ID: ${VITE_AZURE_CLIENT_ID}
         VITE_AZURE_REDIRECT_URI: ${VITE_AZURE_REDIRECT_URI:-http://localhost:5173}
+        # Hotjar site id, baked in at BUILD time like every VITE_ var. Leave it unset
+        # and no tracking script is loaded at all.
+        VITE_HOTJAR_SITE_ID: ${VITE_HOTJAR_SITE_ID:-}
         VITE_DEV_LOGIN: ${VITE_DEV_LOGIN:-false}
         VITE_SPEAKING_AUDIO: ${VITE_SPEAKING_AUDIO:-false}
     container_name: trainer-frontend

@@ -9,7 +9,12 @@ import App from './App';
 import ErrorBoundary from './components/ErrorBoundary';
 import { AuthProvider } from './contexts/AuthContext';
 import { ToastProvider } from './contexts/ToastContext';
+import { initHotjar } from './utils/hotjar';
 import './index.css';
+
+// Before the first render so early interactions are captured. No-op unless a site id was
+// baked in at build time.
+initHotjar();
 
 function renderApp() {
   ReactDOM.createRoot(document.getElementById('root')).render(

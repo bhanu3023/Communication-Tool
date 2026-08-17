@@ -3,6 +3,7 @@ import { useMsal } from '@azure/msal-react';
 import { useNavigate } from 'react-router-dom';
 import { loginRequest } from '../authConfig';
 import api from '../services/api';
+import { identifyHotjar } from '../utils/hotjar';
 import { useToast } from './ToastContext';
 
 const AuthContext = createContext(null);
@@ -19,6 +20,13 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(false);
 
   const isAuthenticated = Boolean(localStorage.getItem('app_token') && profile);
+
+  // Attach the signed-in person to their Hotjar recordings. Runs on a restored session too,
+  // not just a fresh login, or anyone already signed in would record as anonymous. No-op
+  // when Hotjar is not configured.
+  useEffect(() => {
+    identifyHotjar(profile);
+  }, [profile]);
 
   // Guard so the ID-token exchange runs only once even if both the MSAL event
   // callback and handleRedirectPromise deliver the same result.
