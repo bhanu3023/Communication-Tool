@@ -26,6 +26,7 @@ import ReplayIcon from '@mui/icons-material/Replay';
 import MenuBookIcon from '@mui/icons-material/MenuBook';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import InsightsIcon from '@mui/icons-material/Insights';
+import HourglassTopIcon from '@mui/icons-material/HourglassTop';
 import CircularTimer from '../../components/CircularTimer';
 import ScoreGauge from '../../components/ScoreGauge';
 import LockedVideo from '../../components/LockedVideo';
@@ -35,22 +36,26 @@ import { useCountdown } from '../../hooks/useCountdown';
 import { useSpeechRecognition } from '../../hooks/useSpeechRecognition';
 import { useSpeechSynthesis } from '../../hooks/useSpeechSynthesis';
 import { useMicMeter } from '../../hooks/useMicMeter';
-import { useAudioRecorder } from '../../hooks/useAudioRecorder';
+import { micProblemMessage, useAudioRecorder } from '../../hooks/useAudioRecorder';
 import { useExamMode } from '../../hooks/useExamMode';
 import { recordViolation, startSpeaking, submitSpeaking } from '../../services/assessmentService';
 import { useToast } from '../../contexts/ToastContext';
 import { levelRules } from '../../utils/levels';
 
-// Recording PLAYBACK on the results screen is temporarily disabled (per request).
-// The audio is still recorded and sent to the backend so the ACTUAL voice is evaluated
-// — only the playback player is hidden. Flip to true to restore it.
-const RECORDING_PLAYBACK_ENABLED = false;
+// Candidates hear their own recording rather than reading a transcript of it.
+//
+// The transcript used to be shown live while they spoke and again in the feedback, and it
+// confused people: it comes from the browser's speech recognition, which drops the opening words
+// while the mic is still coming up and is not what the score is based on. Two different texts on
+// screen — what they read out and what a recognizer thought it heard — invited them to argue with
+// the wrong one. The recording is the thing being evaluated, so the recording is what they get.
 
 const INTRO_STEPS = [
   { icon: HeadphonesIcon, title: 'Wear earphones', desc: 'Put on your earphones for the clearest recording.' },
   { icon: MenuBookIcon, title: 'Read the sentence aloud', desc: 'A business-migration sentence appears — read it clearly and naturally.' },
   { icon: MicIcon, title: 'Press Record', desc: 'The microphone starts only when you press “Record answer”.' },
-  { icon: ReplayIcon, title: 'One re-record', desc: 'Disturbed? Press Stop, then Re-record once — the latest take is scored.' },
+  { icon: HourglassTopIcon, title: 'Wait one second', desc: 'The mic takes a moment to start. Wait until it says “Listening…”, then begin — speaking too early cuts off your first word.' },
+  { icon: ReplayIcon, title: 'Play it back', desc: 'Press Stop, then listen to your recording. Not happy with it? Re-record once — the latest take is scored.' },
   { icon: ArrowForwardIcon, title: 'No sentence timer', desc: 'Take the time you need, then press “Next”. 10 sentences in total.' },
   { icon: InsightsIcon, title: 'AI feedback', desc: 'You get pronunciation, fluency and accuracy scores with tips to improve.' },
 ];
@@ -69,9 +74,11 @@ export default function Speaking() {
   const homePath = level === 2 ? '/level-2' : '/dashboard';
   const hubPath = level === 2 ? '/level-2' : '/assessment';
   const { showToast } = useToast();
+  // The recognizer still runs, but nothing it hears is shown any more. It is kept purely as a
+  // safety net: if server-side transcription is down when the section is submitted, the backend
+  // scores this text instead of zeroing the candidate for an outage on our side.
   const {
     supported,
-    transcript,
     transcriptRef,
     error: speechError,
     start: startMic,
@@ -97,6 +104,9 @@ export default function Speaking() {
   // How many times each sentence has been recorded: 0, 1, or 2 (1 original + 1 re-record).
   const [recordCounts, setRecordCounts] = useState({});
   const [isRecording, setIsRecording] = useState(false);
+  // The take just finished, as a playable WAV data URL, so the candidate can hear what was
+  // captured before they move on. Cleared whenever they start a new take or change sentence.
+  const [takeAudio, setTakeAudio] = useState(null);
   // Mic and recognizer are coming up but are not capturing yet — the candidate must not speak.
   const [preparing, setPreparing] = useState(false);
   const MAX_RECORDINGS = 2; // original attempt + one re-record
@@ -119,17 +129,38 @@ export default function Speaking() {
       return;
     }
     recordingIdRef.current = current.id;
-    setTranscript(''); // fresh transcript for this take (a re-record replaces the previous one)
+    setTakeAudio(null); // a re-record replaces the previous take, so drop its playback too
+    setTranscript(''); // fresh fallback transcript for this take
     setPreparing(true);
     try {
-      await Promise.all([
-        supported ? startMic() : Promise.resolve(),
-        // Always capture the audio so the candidate can replay each sentence later.
-        recorder.supported ? recorder.start() : Promise.resolve(),
-      ]);
+      // Capture must be PROVEN before the UI says a word about recording. This used to start the
+      // recorder, ignore whether it worked, and set isRecording in a finally -- so a candidate
+      // whose microphone was blocked (or who was on an http:// origin, where the browser removes
+      // the API outright) watched a running recorder, delivered a full answer, and lost it. If
+      // capture cannot start we say exactly why and stay put: no attempt is consumed, because
+      // recordCounts only advances when a take is finalised, so they can fix it and press Record
+      // again.
+      if (!recorder.supported) {
+        showToast(micProblemMessage(recorder.reason), 'error');
+        return;
+      }
+      // The recorder goes FIRST and is fully settled before the recognizer is allowed near the
+      // microphone. Both open their own capture stream, and starting them together meant the
+      // device was being reconfigured underneath the recorder at the exact moment it began
+      // capturing -- which is where the damaged opening words come from. The recording is what
+      // gets scored, so it gets the clean start; the recognizer is only an outage fallback and
+      // can afford to miss the first word.
+      const started = await recorder.start();
+      if (!started) {
+        showToast(micProblemMessage(recorder.error), 'error');
+        return;
+      }
+      if (supported) {
+        await startMic();
+      }
+      setIsRecording(true);
     } finally {
       setPreparing(false);
-      setIsRecording(true);
     }
   };
 
@@ -151,6 +182,9 @@ export default function Speaking() {
       };
       setRecordCounts((prev) => ({ ...prev, [id]: (prev[id] || 0) + 1 }));
     }
+    // Offer it straight back for playback. Null means the browser gave us nothing usable, and the
+    // panel says so — better they find that out here than after the section is scored.
+    setTakeAudio(audio || null);
     recordingIdRef.current = null;
   }, [recorder, stopMic, transcriptRef]);
 
@@ -228,17 +262,17 @@ export default function Speaking() {
     },
   });
 
-  // Surface speech-recognition errors so the candidate knows what's wrong.
+  // Only surface recognizer problems that also break the RECORDING, which is what is actually
+  // scored. A blocked or missing mic means there is nothing to record and the candidate must fix
+  // it; the rest — the recognizer's own network trouble, an engine that gave up — leaves the
+  // recording perfectly intact, and warning about it would send someone chasing a fault that
+  // does not affect their result.
   useEffect(() => {
-    if (!speechError) return;
+    if (speechError !== 'not-allowed' && speechError !== 'audio-capture') return;
     const msg =
       speechError === 'not-allowed'
         ? 'Microphone permission is blocked. Allow it in the browser (🔒 icon → Microphone).'
-        : speechError === 'network'
-          ? 'Speech recognition needs an internet connection (Chrome/Edge send audio to Google).'
-          : speechError === 'audio-capture'
-            ? 'No microphone was captured — it may be muted or used by another app.'
-            : `Speech recognition error: ${speechError}`;
+        : 'No microphone was captured — it may be muted or used by another app.';
     showToast(msg, 'error');
   }, [speechError, showToast]);
 
@@ -246,6 +280,7 @@ export default function Speaking() {
   // the candidate presses "Record" when ready.
   useEffect(() => {
     setTranscript('');
+    setTakeAudio(null);
     stopMic();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [index]);
@@ -447,12 +482,20 @@ export default function Speaking() {
             is capturing your voice. Headphones are recommended but not required.
           </Typography>
 
-          {mic.status === 'denied' && (
+          {/* A hard block -- an insecure origin or a browser with no MediaRecorder -- is not a
+              microphone fault and no amount of retrying or granting permission fixes it, so it is
+              reported first, in its own words, and it removes both ways into the test below. */}
+          {recorder.reason && (
+            <Alert severity="error" sx={{ mb: 2, textAlign: 'left' }}>
+              {micProblemMessage(recorder.reason)}
+            </Alert>
+          )}
+          {!recorder.reason && mic.status === 'denied' && (
             <Alert severity="error" sx={{ mb: 2 }}>
               Microphone access was blocked. Allow microphone permission in your browser, then retry.
             </Alert>
           )}
-          {mic.status === 'error' && (
+          {!recorder.reason && mic.status === 'error' && (
             <Alert severity="warning" sx={{ mb: 2 }}>
               Could not access a microphone. Please check that one is connected and not muted.
             </Alert>
@@ -476,21 +519,31 @@ export default function Speaking() {
           />
 
           <Box>
-            {(mic.status === 'denied' || mic.status === 'error') && (
+            {!recorder.reason && (mic.status === 'denied' || mic.status === 'error') && (
               <Button variant="outlined" onClick={() => mic.start()} sx={{ mr: 1 }}>
                 Retry
               </Button>
             )}
-            <Button variant="contained" size="large" disabled={mic.status !== 'ok'} onClick={beginTest}>
+            <Button
+              variant="contained"
+              size="large"
+              disabled={mic.status !== 'ok' || !!recorder.reason}
+              onClick={beginTest}
+            >
               Start Speaking Test
             </Button>
           </Box>
           <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 2 }}>
             The button enables once your microphone is detected.
           </Typography>
-          <Button variant="text" size="small" color="secondary" sx={{ mt: 1 }} onClick={beginTest}>
-            Microphone working but not detected? Start anyway
-          </Button>
+          {/* Offered only when capture is genuinely possible and the meter merely failed to see a
+              voice -- a quiet mic still records. When the browser cannot capture at all this
+              button guaranteed a zero, so it is not shown. */}
+          {!recorder.reason && (
+            <Button variant="text" size="small" color="secondary" sx={{ mt: 1 }} onClick={beginTest}>
+              Microphone working but not detected? Start anyway
+            </Button>
+          )}
         </CardContent>
       </Card>
     );
@@ -594,8 +647,11 @@ export default function Speaking() {
                   </Button>
                 )}
 
+                {/* Feedback shows the text, not the audio — the player belongs to the test, where
+                    they can still fix a bad take. What they get here is the transcript of the
+                    recording, which is the same text that was scored. */}
                 <Typography variant="caption" color="text.secondary" display="block">
-                  You said — from your recording
+                  What your recording was heard to say
                 </Typography>
                 <Typography
                   sx={{
@@ -607,23 +663,9 @@ export default function Speaking() {
                   {said
                     ? `“${said}”`
                     : it.transcriptionFailed
-                      ? 'Your recording could not be processed, so there is no text to show. Your score is unaffected.'
-                      : 'No speech was detected for this sentence.'}
+                      ? 'Your recording could not be processed this time, so there is no text to show. Your score is unaffected.'
+                      : 'No speech was detected in your recording for this sentence.'}
                 </Typography>
-
-                {(() => {
-                  const sid = sentences[i]?.id;
-                  const audioSrc = sid != null ? resultsRef.current[sid]?.audio : null;
-                  return RECORDING_PLAYBACK_ENABLED && audioSrc ? (
-                    <Box sx={{ mb: 2 }}>
-                      <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
-                        Your recording — listen to what you said
-                      </Typography>
-                      {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
-                      <audio controls src={audioSrc} style={{ width: '100%', height: 40 }} />
-                    </Box>
-                  ) : null;
-                })()}
 
                 <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mb: ev.suggestions?.length ? 2 : 0 }}>
                   {DIMENSIONS.map(([label, key]) => (
@@ -635,7 +677,7 @@ export default function Speaking() {
                 {Array.isArray(ev.suggestions) && ev.suggestions.length > 0 && (
                   <Box>
                     <Typography variant="caption" color="text.secondary">
-                      How to improve
+                      Feedback & practice
                     </Typography>
                     <Box component="ul" sx={{ m: '4px 0 0', pl: 2.5 }}>
                       {ev.suggestions.map((s, j) => (
@@ -735,19 +777,28 @@ export default function Speaking() {
 
           <Paper variant="outlined" sx={{ p: 2, minHeight: 72, bgcolor: '#f8fafd' }}>
             <Typography variant="caption" color="text.secondary">
-              Recognized transcript
+              Your recording
             </Typography>
-            <Typography>
-              {transcript ||
-                (preparing
+            {takeAudio ? (
+              <Box>
+                {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+                <audio controls src={takeAudio} style={{ width: '100%', height: 40, marginTop: 8 }} />
+                <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
+                  Listen to what you said — this recording is what gets evaluated.
+                  {recordCount < MAX_RECORDINGS
+                    ? ' If it is not right, you can re-record once.'
+                    : ' You have used your re-record for this sentence.'}
+                </Typography>
+              </Box>
+            ) : (
+              <Typography sx={{ mt: 0.5 }}>
+                {preparing
                   ? 'Getting the mic ready — please wait before speaking…'
                   : isRecording
-                    ? 'Listening… start speaking'
-                    : '—')}
-            </Typography>
-            {speechError && (
-              <Typography variant="caption" color="error" display="block" sx={{ mt: 1 }}>
-                Recognition error: {speechError}
+                    ? 'Recording… read the sentence aloud, then press “Stop recording”.'
+                    : recordCount > 0
+                      ? 'Your recording could not be played back. Please re-record this sentence.'
+                      : 'Press “Record answer”, read the sentence aloud, then play it back here.'}
               </Typography>
             )}
           </Paper>

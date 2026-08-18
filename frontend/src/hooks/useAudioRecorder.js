@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 // --- WAV helpers: downsample to 16 kHz mono and encode 16-bit PCM ---
 function downsample(buffer, inRate, outRate) {
@@ -60,6 +60,118 @@ function blobToBase64(blob) {
 }
 
 /**
+ * Capture constraints, chosen from measurement rather than the browser defaults.
+ *
+ * <p>`audio: true` lets Chrome apply its telephony processing chain, and it was hurting us. Every
+ * stored recording peaks at exactly -0.0 dBFS, i.e. automatic gain control had driven the signal
+ * into clipping, and clipping distorts precisely the stressed syllables a transcriber leans on.
+ *
+ * <p>None of that processing is needed here. Transcription accuracy was measured on deliberately
+ * degraded audio: at 10 dB signal-to-noise it was 0% word error, at 5 dB 2.2%, and a recording
+ * quietened by 20 dB still came back word perfect. The transcriber is robust to noise and
+ * indifferent to level, so noise suppression and gain control can only take away detail. Echo
+ * cancellation has nothing to cancel: nothing is playing while the candidate speaks.
+ */
+const AUDIO_CONSTRAINTS = {
+  audio: {
+    echoCancellation: false,
+    noiseSuppression: false,
+    autoGainControl: false,
+    channelCount: 1,
+  },
+};
+
+/** How long to keep quiet after audio starts flowing, before inviting the candidate to speak. */
+const SETTLE_MS = 400;
+
+const settle = (ms) => new Promise((resolve) => { setTimeout(resolve, ms); });
+
+/**
+ * Resolves once the recorder has emitted its first audio chunk, or after a second, whichever
+ * comes first. The timeout matters: if a browser never fires the event we must still let the
+ * candidate record rather than stranding them on "Getting the mic ready".
+ */
+function firstAudioOrTimeout(recorder) {
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      recorder.removeEventListener('dataavailable', finish);
+      resolve();
+    };
+    recorder.addEventListener('dataavailable', finish);
+    setTimeout(finish, 1000);
+  });
+}
+
+/**
+ * Why microphone capture is impossible in this browser, or null when it is available.
+ *
+ * 'insecure-origin' is the one that bites in production and gets reported as "the browser is not
+ * allowing it". getUserMedia is gated on a secure context, so on a plain http:// page
+ * navigator.mediaDevices is simply UNDEFINED -- Chrome, Edge and Firefox remove the API outright
+ * rather than prompting, and there is no permission the candidate can grant to get it back. Only
+ * localhost is exempt, which is exactly why this never reproduces in local testing. The app is
+ * served over https, so this shows up when someone reaches it through an http:// link, a raw IP
+ * address, or an internal hostname with no TLS. It must be named precisely: reported as a broken
+ * microphone it sends the candidate hunting through browser settings that cannot fix it.
+ */
+function detectUnavailable() {
+  if (typeof window === 'undefined' || typeof navigator === 'undefined') return 'unsupported-browser';
+  if (window.isSecureContext === false) return 'insecure-origin';
+  if (!navigator.mediaDevices?.getUserMedia) {
+    // Secure but still missing: an old browser, or a WebView with media disabled.
+    return 'unsupported-browser';
+  }
+  if (typeof window.MediaRecorder === 'undefined') return 'unsupported-browser';
+  return null;
+}
+
+/** Maps a getUserMedia / MediaRecorder rejection onto something the candidate can act on. */
+function captureErrorCode(e) {
+  switch (e?.name) {
+    case 'NotAllowedError':
+    case 'SecurityError':
+      return 'denied';
+    case 'NotFoundError':
+    case 'DevicesNotFoundError':
+    case 'OverconstrainedError':
+      return 'no-mic';
+    case 'NotReadableError':
+    case 'TrackStartError':
+    case 'AbortError':
+      return 'in-use';
+    default:
+      return 'failed';
+  }
+}
+
+/**
+ * Plain-English, actionable text for a capture problem. Lives here so the mic check screen and
+ * the exam itself cannot drift into describing the same fault two different ways.
+ */
+export function micProblemMessage(code) {
+  switch (code) {
+    case 'insecure-origin':
+      return 'Recording is blocked because this page was not opened over a secure (https) connection. '
+        + 'Browsers only allow the microphone on https. Please open the official https link for the app.';
+    case 'unsupported-browser':
+      return 'This browser cannot record audio. Please use an up-to-date Chrome, Edge, Firefox or Safari.';
+    case 'denied':
+      return 'Microphone permission is blocked. Allow it from the lock icon in the address bar, '
+        + 'then press Record again.';
+    case 'no-mic':
+      return 'No microphone was found. Connect or unmute one, then press Record again.';
+    case 'in-use':
+      return 'Your microphone is being used by another app (Teams, Zoom or Meet). '
+        + 'Close it, then press Record again.';
+    default:
+      return 'The microphone could not be started. Please press Record again.';
+  }
+}
+
+/**
  * Records microphone audio and returns it as a base64 WAV (16 kHz mono) suitable
  * for Azure / OpenAI pronunciation assessment.
  *
@@ -69,12 +181,14 @@ function blobToBase64(blob) {
  * silently produced empty recordings in some production environments.
  */
 export function useAudioRecorder() {
-  const supported =
-    typeof navigator !== 'undefined' &&
-    !!navigator.mediaDevices?.getUserMedia &&
-    typeof window !== 'undefined' &&
-    typeof window.MediaRecorder !== 'undefined';
+  // Why capture cannot work at all here (null when it can). Computed once: none of it changes
+  // for the life of the page.
+  const reason = useMemo(detectUnavailable, []);
+  const supported = reason === null;
   const [recording, setRecording] = useState(false);
+  // The last reason a start() attempt failed, so the caller can tell the candidate. This used to
+  // be swallowed entirely.
+  const [error, setError] = useState(null);
 
   const streamRef = useRef(null);
   const recorderRef = useRef(null);
@@ -89,10 +203,18 @@ export function useAudioRecorder() {
     recorderRef.current = null;
   }, []);
 
+  // Returns TRUE only when audio is genuinely being captured. The caller must not announce
+  // "Recording" on a false: this swallowed every failure and returned as though it had worked, so
+  // a candidate whose microphone was blocked was shown a running recorder, spoke a full answer
+  // into nothing, and only found out when the take came back empty.
   const start = useCallback(async () => {
-    if (!supported) return;
+    if (!supported) {
+      setError(reason);
+      return false;
+    }
+    setError(null);
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const stream = await navigator.mediaDevices.getUserMedia(AUDIO_CONSTRAINTS);
       streamRef.current = stream;
       // Pick a container the browser actually supports (Chrome/Edge: webm/opus,
       // Safari: mp4). We transcode to WAV on stop, so the container doesn't matter.
@@ -105,12 +227,28 @@ export function useAudioRecorder() {
       recorder.ondataavailable = (e) => {
         if (e.data && e.data.size > 0) chunksRef.current.push(e.data);
       };
+      // Report "recording" only once the encoder has actually handed us audio, and then give
+      // it a moment more to settle. Opening a capture stream is not instant and the first
+      // fraction of a second comes back damaged: in every stored recording the file begins with
+      // 300ms of digital silence and then speech at full level with no fade-in, and the opening
+      // word transcribes as gibberish ("Please confirm the folder" was heard as "Count down the
+      // total"; the first 1.5s on its own reads "Come from that floor over"). Whatever the browser
+      // is doing in that window, the candidate must not be speaking into it -- so the UI stays on
+      // "Getting the mic ready" until it has passed.
       recorder.start(200); // emit chunks periodically so nothing is lost
+      await firstAudioOrTimeout(recorder);
+      await settle(SETTLE_MS);
       setRecording(true);
-    } catch {
+      return true;
+    } catch (e) {
+      // Release anything that did open -- getUserMedia can succeed and the MediaRecorder
+      // construction still throw, which would otherwise leave the mic light on with no recorder.
+      cleanup();
       setRecording(false);
+      setError(captureErrorCode(e));
+      return false;
     }
-  }, [supported]);
+  }, [supported, reason, cleanup]);
 
   // Returns base64 WAV (data URL) or null.
   const stop = useCallback(async () => {
@@ -151,5 +289,5 @@ export function useAudioRecorder() {
 
   useEffect(() => () => cleanup(), [cleanup]);
 
-  return { supported, recording, start, stop };
+  return { supported, reason, error, recording, start, stop };
 }

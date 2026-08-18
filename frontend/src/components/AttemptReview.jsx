@@ -1,9 +1,7 @@
-import { useEffect, useState } from 'react';
 import {
   Box,
   Button,
   Chip,
-  CircularProgress,
   Divider,
   Paper,
   Stack,
@@ -17,79 +15,20 @@ import {
 import HeadphonesIcon from '@mui/icons-material/Headphones';
 import MicIcon from '@mui/icons-material/Mic';
 import EditNoteIcon from '@mui/icons-material/EditNote';
-import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import VolumeUpIcon from '@mui/icons-material/VolumeUp';
 import LightbulbOutlinedIcon from '@mui/icons-material/LightbulbOutlined';
-import { getSpeakingRecording } from '../services/assessmentService';
 import { useSpeechSynthesis } from '../hooks/useSpeechSynthesis';
 import { scoreColor } from '../utils/format';
 
-// Recording PLAYBACK in feedback is temporarily disabled (per request). The audio is
-// still captured, stored, and evaluated on the backend — only the player UI is hidden
-// here (user dashboard + manager view). Flip this to true to bring the
-// "Play my recording" control back.
-const RECORDING_PLAYBACK_ENABLED = false;
-
-/** Lazily loads and plays one sentence's stored recording (fetched with auth). */
-function RecordingPlayer({ sessionId, index }) {
-  const [url, setUrl] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(false);
-
-  useEffect(() => () => { if (url) URL.revokeObjectURL(url); }, [url]);
-
-  const load = async () => {
-    setLoading(true);
-    setError(false);
-    try {
-      const blob = await getSpeakingRecording(sessionId, index);
-      setUrl(URL.createObjectURL(blob));
-    } catch {
-      setError(true);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  if (url) {
-    // Some browsers show 0:00 / 0:00 for blob-sourced audio until the duration is
-    // known. Force it to resolve: on metadata load, if the duration is missing/infinite,
-    // seek to the end and back so the element reports the real length.
-    const fixDuration = (e) => {
-      const a = e.currentTarget;
-      if (!Number.isFinite(a.duration) || a.duration === 0) {
-        const onUpdate = () => {
-          a.currentTime = 0;
-          a.removeEventListener('timeupdate', onUpdate);
-        };
-        a.addEventListener('timeupdate', onUpdate);
-        a.currentTime = 1e101; // jump past the end to trigger duration calculation
-      }
-    };
-    return (
-      // eslint-disable-next-line jsx-a11y/media-has-caption
-      <audio
-        controls
-        preload="auto"
-        src={url}
-        onLoadedMetadata={fixDuration}
-        style={{ width: '100%', height: 40, marginTop: 8 }}
-      />
-    );
-  }
-  return (
-    <Button
-      size="small"
-      variant="outlined"
-      onClick={load}
-      disabled={loading}
-      startIcon={loading ? <CircularProgress size={14} /> : <PlayArrowIcon />}
-      sx={{ mt: 1 }}
-    >
-      {error ? 'Recording unavailable' : loading ? 'Loading…' : 'Play my recording'}
-    </Button>
-  );
-}
+/*
+ * There is no recording player in feedback on purpose.
+ *
+ * It fetched the stored audio from the server (GET /api/speaking/recording/...) and that does not
+ * work in production, so the control was there without ever playing anything. The candidate hears
+ * their take during the test instead, where the audio is still in the browser and needs no round
+ * trip; here they read what the recording was heard to say. Audio is still captured and stored, and
+ * the endpoint still exists — only this player is gone.
+ */
 
 function MetricChips({ obj, keys }) {
   if (!obj) return null;
@@ -264,7 +203,12 @@ export function SpeakingSection({ details, score, showHeader = true, sessionId, 
                 </Stack>
               </Box>
 
-              {/* You said */}
+              {/* What was heard — the transcript of their own recording, produced server-side.
+                  This is the only text shown anywhere in the speaking flow. It is NOT what the
+                  browser thought it heard while they spoke (that text is a live convenience and is
+                  never shown); it is what the recording was actually transcribed as, which is also
+                  exactly what was scored. Without it, feedback on a spoken answer would be a
+                  number with nothing to check it against. */}
               <Box
                 sx={{
                   borderRadius: 2,
@@ -280,7 +224,7 @@ export function SpeakingSection({ details, score, showHeader = true, sessionId, 
                   color="text.secondary"
                   sx={{ display: 'block', fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.5 }}
                 >
-                  You said — from your recording
+                  {managerView ? 'Heard in the recording' : 'What your recording was heard to say'}
                 </Typography>
                 <Typography
                   variant="body2"
@@ -289,16 +233,12 @@ export function SpeakingSection({ details, score, showHeader = true, sessionId, 
                   {said
                     ? `“${said}”`
                     : it.transcriptionFailed
-                      ? 'Your recording could not be processed, so there is no text to show. Your score is unaffected.'
-                      : 'No speech detected.'}
+                      ? (managerView
+                          ? 'The recording could not be processed, so there is no text to show. The score is unaffected.'
+                          : 'Your recording could not be processed this time, so there is no text to show. Your score is unaffected.')
+                      : 'No speech was detected in the recording for this sentence.'}
                 </Typography>
               </Box>
-
-              {RECORDING_PLAYBACK_ENABLED && sessionId && it.hasAudio && (
-                <Box sx={{ mb: 2 }}>
-                  <RecordingPlayer sessionId={sessionId} index={i} />
-                </Box>
-              )}
 
               {/* Sub-scores as clean stat tiles */}
               <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: tips.length ? 2 : 0 }}>
@@ -307,7 +247,7 @@ export function SpeakingSection({ details, score, showHeader = true, sessionId, 
                 )}
               </Box>
 
-              {/* How to improve — highlighted callout */}
+              {/* Feedback callout: opens with a strength, then fixes, then a line to practise. */}
               {tips.length > 0 && (
                 <Box
                   sx={{
@@ -323,7 +263,7 @@ export function SpeakingSection({ details, score, showHeader = true, sessionId, 
                       variant="caption"
                       sx={{ fontWeight: 700, color: 'primary.main', textTransform: 'uppercase', letterSpacing: 0.5 }}
                     >
-                      How to improve
+                      Feedback & practice
                     </Typography>
                   </Stack>
                   <Box component="ul" sx={{ m: 0, pl: 2.5 }}>
