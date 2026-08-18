@@ -43,7 +43,11 @@ app:
     audio-model: ${OPENAI_AUDIO_MODEL:gpt-audio-mini}
     # Speech-to-text for the speaking section: the recording is transcribed here rather than
     # trusting whatever the browser's Web Speech API heard.
-    transcribe-model: ${OPENAI_TRANSCRIBE_MODEL:whisper-1}
+    # Measured on 20 real candidate recordings (see .claude/memory/decisions.md): with the
+    # accent prompt, gpt-4o-transcribe scored 13.0% word error rate against whisper-1's 15.8%.
+    # Without the prompt it is WORSE than whisper (20.6%), so the two go together.
+    # NOTE: this model rejects response_format=verbose_json - do not ask it for timings.
+    transcribe-model: ${OPENAI_TRANSCRIBE_MODEL:gpt-4o-transcribe}
     base-url: ${OPENAI_BASE_URL:https://api.openai.com/v1}
 
 springdoc:

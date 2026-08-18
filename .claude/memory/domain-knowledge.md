@@ -18,8 +18,35 @@ or assessment logic.
 - **Listening** — objective MCQ: **10 marks per correct answer, max 100**. AI "summary"
   (attention / accuracy / consistency) is deterministic.
 - **Speaking** — per sentence, weighted rubric:
-  **pronunciation 30% · accuracy 25% · fluency 20% · grammar 10% · vocabulary 10% · confidence 5%**.
-  Section score = average across the sentences. Optional real pronunciation scoring via Azure Speech.
+  **accuracy 60% · grammar 15% · vocabulary 15% · pronunciation 5% · fluency 3% · confidence 2%**
+  (`AiService.weightedOverall`). Weight sits on what the recording can actually evidence; the older
+  pronunciation-30% split predates that and is no longer the code. Section score = average across
+  the sentences.
+  - **Transcriber is `gpt-4o-transcribe` WITH the accent prompt** (13.0% WER on real candidate
+    audio vs whisper-1's 15.8%). Without the prompt that model is the worst option (20.6%) --
+    the two must move together. See [[decisions]] 2026-08-18.
+  - **Graded from the recording, not the browser.** The audio is transcribed server-side (whisper)
+    and THAT text is scored. The browser's Web Speech transcript is only an outage fallback and is
+    never shown to a candidate.
+  - **Grammar and vocabulary are capped at `accuracy + 25`** in code (`AiService.scoreSpeaking`).
+    The examiner kept awarding both 100 on plainly broken utterances, reasoning that a repetition
+    slip is not a grammar fault, and since they carry 30% between them that rescued answers which
+    should have failed. Prompt wording alone did not hold; the ceiling does.
+  - **Compound-word splits are never mistakes.** "sub-folders" spoken correctly comes back from
+    whisper as "subfolders"; `forComparison` turns the hyphen into a space, so the strict rubric
+    counted the join as a wrong word and docked a perfect read. The rubric now exempts spacing and
+    hyphenation, and forbids tips about spelling — the candidate is speaking, not typing.
+  - **Accent-fair by design.** Candidates are freshers speaking Indian English, so the examiner
+    prompt marks intelligibility, not resemblance to an American or British speaker, and is
+    forbidden from deducting for or commenting on the accent. The transcriber is also given the
+    accent and domain as context so a correctly-read word is not written down as a different one.
+  - **Pronunciation = intelligibility**: a target word the accent-robust transcriber recovered was
+    clear enough (85-95); marks come off only where a word came back as a different,
+    similar-sounding word. Capped at 95 — finer detail cannot be heard from a transcript.
+  - **Fluency and confidence are NOT measured** — nothing in the pipeline hears the voice itself, so
+    they are held at a neutral 60-75. Azure Speech (the only path that could score pronunciation
+    acoustically) was removed in `5588da3`. Measuring fluency from whisper's timings was tried and
+    rejected — see [[decisions]] (2026-08-18).
 - **Writing** — 10-dimension rubric: grammar, clarity, vocabulary, tone, professionalism, structure,
   readability, completeness, spelling, conciseness — plus mistakes, suggestions, and an improved
   version. Section score = average of the 10 dimensions.

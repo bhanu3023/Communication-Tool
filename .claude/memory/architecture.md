@@ -31,15 +31,23 @@ Three assessment modules (Listening / Speaking / Writing), each: controller `/ap
 
 ## Scoring (see [[domain-knowledge]])
 - Listening: MCQ, 10/correct (max 100), deterministic AI summary.
-- Speaking: weighted rubric acc 60 / gram 15 / vocab 15 / pron 5 / flu 3 / conf 2; section = average. Pronunciation, fluency and confidence cannot be heard from a transcript, so they are held near 70 and carry token weight.
+- Speaking: weighted rubric acc 60 / gram 15 / vocab 15 / pron 5 / flu 3 / conf 2; section = average.
+  Scored from the server-side transcription of the recording (whisper), never the browser transcript.
+  The rubric is accent-fair for Indian-English freshers: pronunciation is judged as intelligibility
+  (capped 95), while fluency and confidence cannot be heard at all and are held near 70 on token
+  weight. In the TEST the candidate plays back the take they just recorded; in FEEDBACK they read the
+  transcript of it and there is no player (see [[decisions]]).
 - Writing: 10-dimension rubric average + mistakes/suggestions/improved version.
 - Weak area = lowest section; **pass mark = 75** per section (pass/fail status). NB: README says
   "overall = mean of sections" but the code does not compute a numeric combined score — sections are
   independent by design (see [[domain-knowledge]] / [[decisions]]). Doc/code discrepancy to resolve.
 
 ## Timers
-Per section, two `useCountdown` timers: **overall 10 min** (toast at 5m/1m/10s, auto-submit at 0) and
-**per-question** (60s listening / 30s speaking / 5m writing, auto-advance + `resetKey`).
+Listening and Speaking: **overall 10 min** (toast at 5m/1m/10s, auto-submit at 0) plus per-question
+(60s listening; Speaking has no per-sentence timer). Writing is different: **no overall timer** --
+each of the 2 tasks gets **5 min reading** (no typing) then a **banked 10 min writing** timer, and
+only the active task's time ticks down (`WritingService.THINKING_SECONDS`/`QUESTION_SECONDS`), so an
+attempt runs 30 min. `overallSeconds` is still sent for Writing but the screen ignores it.
 
 ## Persistence & config
 PostgreSQL 16; Hibernate `ddl-auto: update`; `defer-datasource-initialization: true` runs

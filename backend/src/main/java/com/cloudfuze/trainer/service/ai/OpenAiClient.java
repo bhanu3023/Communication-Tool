@@ -34,6 +34,25 @@ public class OpenAiClient {
     private final String audioModel;
     private final String transcribeModel;
     private final RestClient restClient;
+
+    /**
+     * Context handed to the transcriber before it decodes the clip.
+     *
+     * <p>Whisper accepts a prompt as "what was said just before this audio" and uses it to settle
+     * spelling, proper nouns and speaking style. Naming the accent and the domain stops an
+     * Indian-English pronunciation of a familiar word being written down as a different word —
+     * which is the failure that shows up as a low accuracy score for someone who read correctly.
+     *
+     * <p>It is deliberately generic. The sentence the candidate is reading must NEVER be put in
+     * here: the model treats the prompt as preceding context and will happily continue the target
+     * text it was given rather than report what it actually heard, which would hand out marks for
+     * words nobody spoke.
+     */
+    private static final String ACCENT_PROMPT =
+            "The following is a business English sentence read aloud by an Indian English speaker "
+                    + "working in enterprise cloud data migration. Expect terms such as migration, "
+                    + "tenant, OneDrive, SharePoint, Google Drive, Dropbox, Box, synchronization, "
+                    + "onboarding, stakeholder, deployment and percentages.";
     private final ObjectMapper mapper = new ObjectMapper();
 
     public OpenAiClient(@Value("${app.openai.api-key:}") String apiKey,
@@ -41,7 +60,7 @@ public class OpenAiClient {
                         // gpt-4o-audio-preview 404s on our account; an unset variable therefore
                         // disabled audio scoring silently. See docker-compose.yml.
                         @Value("${app.openai.audio-model:gpt-audio-mini}") String audioModel,
-                        @Value("${app.openai.transcribe-model:whisper-1}") String transcribeModel,
+                        @Value("${app.openai.transcribe-model:gpt-4o-transcribe}") String transcribeModel,
                         @Value("${app.openai.base-url:https://api.openai.com/v1}") String baseUrl) {
         this.apiKey = apiKey;
         this.model = model;
@@ -129,6 +148,9 @@ public class OpenAiClient {
             // The candidates speak Indian English; naming the language stops the model
             // guessing another one from a short or noisy clip.
             form.add("language", "en");
+            // Biases the decoder toward that accent and this domain's vocabulary, so a candidate
+            // is not misheard — and so marked down — for the accent they read it in.
+            form.add("prompt", ACCENT_PROMPT);
 
             JsonNode response = restClient.post()
                     .uri("/audio/transcriptions")
