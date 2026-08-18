@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
+import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   Accordion,
   AccordionDetails,
@@ -168,6 +168,24 @@ export default function EmployeeDetail() {
   const [searchParams] = useSearchParams();
   const [level, setLevel] = useState(Number(searchParams.get('level')) === 2 ? 2 : 1);
 
+  // Where "Back to team" goes. The team page keeps its filters in the query string and hands
+  // that whole view over in location.state.from, so going back lands on the same filtered table
+  // instead of the full company list. The level is re-applied from THIS page rather than taken
+  // from the incoming view, because the manager may have switched level while they were here and
+  // arriving back on a different level than the one they were just reading looks like a bug.
+  // No state (a bookmarked or refreshed detail URL) simply falls back to the plain team page.
+  const location = useLocation();
+  const backTo = useMemo(() => {
+    const from = location.state?.from;
+    if (typeof from !== 'string' || !from.startsWith('/manager')) return '/manager';
+    const [path, query] = from.split('?');
+    const params = new URLSearchParams(query || '');
+    if (level === 1) params.delete('level');
+    else params.set('level', String(level));
+    const qs = params.toString();
+    return qs ? `${path}?${qs}` : path;
+  }, [location.state, level]);
+
   // Sections, warnings and feedback are all per level, so a level change refetches.
   useEffect(() => {
     setLoading(true);
@@ -214,7 +232,7 @@ export default function EmployeeDetail() {
     <Box>
       {/* Top actions */}
       <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
-        <Button startIcon={<ArrowBackIcon />} onClick={() => navigate('/manager')}>
+        <Button startIcon={<ArrowBackIcon />} onClick={() => navigate(backTo)}>
           Back to team
         </Button>
         <Button variant="contained" startIcon={<DownloadIcon />} onClick={handleDownload} disabled={downloading}>

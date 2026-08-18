@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Avatar,
   Box,
@@ -38,11 +38,36 @@ export default function ManagerDashboard() {
   const { showToast } = useToast();
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
-  const [status, setStatus] = useState('all'); // 'all' | 'attempted' | 'not_attempted'
-  const [team, setTeam] = useState(''); // '' = all teams
   const [teams, setTeams] = useState([]);
-  const [level, setLevel] = useState(1);
+
+  // Filters live in the URL, not in component state. Opening a candidate unmounts this page, so
+  // useState filters came back at their defaults: a manager who had narrowed the table to
+  // Freshers landed on the whole company again, and had to re-pick the filter once per candidate
+  // they looked at. A query string survives that round trip, and refreshing, bookmarking and
+  // sharing a filtered view come free with it. Defaults are kept out of the URL so an unfiltered
+  // view still reads as a plain /manager.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const search = searchParams.get('q') || '';
+  const status = searchParams.get('status') || 'all'; // 'all' | 'attempted' | 'not_attempted'
+  const team = searchParams.get('team') || '';        // '' = all teams
+  const level = Number(searchParams.get('level')) === 2 ? 2 : 1;
+
+  // replace: true -- otherwise every keystroke in the search box pushes a history entry and the
+  // browser's Back button walks letter by letter instead of leaving the page.
+  const setFilter = useCallback(
+    (key, value, defaultValue = '') => {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          if (!value || String(value) === String(defaultValue)) next.delete(key);
+          else next.set(key, String(value));
+          return next;
+        },
+        { replace: true },
+      );
+    },
+    [setSearchParams],
+  );
 
   // Scores are fetched per level: Level 1 and Level 2 have different pass marks and
   // attempt allowances, so they are never mixed into one row.
@@ -65,7 +90,13 @@ export default function ManagerDashboard() {
       .catch(() => {}); // filter is optional — silently degrade if teams can't load
   }, []);
 
-  const open = (id) => navigate(`/manager/employee/${id}?level=${level}`);
+  // Hand the current filtered view to the detail page so its "Back to team" can restore it.
+  // It travels in location.state rather than the URL to keep the detail link clean; a manager
+  // who opens that link directly just falls back to the unfiltered team page.
+  const open = (id) =>
+    navigate(`/manager/employee/${id}?level=${level}`, {
+      state: { from: `/manager?${searchParams.toString()}` },
+    });
   const accent = levelTheme(level).accent;
 
   const hasAttempted = (r) =>
@@ -100,7 +131,7 @@ export default function ManagerDashboard() {
 
       {/* Level switcher — the whole table reports the selected level */}
       <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 1 }} flexWrap="wrap" useFlexGap>
-        <LevelTabs value={level} onChange={setLevel} alwaysUnlocked />
+        <LevelTabs value={level} onChange={(v) => setFilter('level', v, 1)} alwaysUnlocked />
         <Chip size="small" variant="outlined" label={rulesSummary(level)} />
         {level === 2 && (
           <Chip
@@ -121,7 +152,7 @@ export default function ManagerDashboard() {
         fullWidth
         placeholder="Search employee by name or email"
         value={search}
-        onChange={(e) => setSearch(e.target.value)}
+        onChange={(e) => setFilter('q', e.target.value)}
         sx={{ mb: 2, bgcolor: '#fff', '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
         InputProps={{
           startAdornment: (
@@ -146,7 +177,7 @@ export default function ManagerDashboard() {
         <FormControl size="small" sx={{ minWidth: 210 }}>
           <Select
             value={team}
-            onChange={(e) => setTeam(e.target.value)}
+            onChange={(e) => setFilter('team', e.target.value)}
             displayEmpty
             startAdornment={
               <InputAdornment position="start">
@@ -171,7 +202,7 @@ export default function ManagerDashboard() {
               <Chip
                 key={f.key}
                 label={`${f.label} (${counts[f.key]})`}
-                onClick={() => setStatus(f.key)}
+                onClick={() => setFilter('status', f.key, 'all')}
                 variant={active ? 'filled' : 'outlined'}
                 color={active ? 'primary' : 'default'}
                 sx={{ fontWeight: 600, borderRadius: 2, cursor: 'pointer' }}
