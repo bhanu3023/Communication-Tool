@@ -68,7 +68,10 @@ export default function Writing() {
 
   const prompts = data?.prompts || [];
   const current = prompts[index];
-  const qSeconds = data?.questionSeconds ?? 360;
+  const qSeconds = data?.questionSeconds ?? 600;
+  const thinkSeconds = data?.thinkingSeconds ?? 300;
+  const qMinutes = Math.round(qSeconds / 60);
+  const thinkMinutes = Math.round(thinkSeconds / 60);
 
   const recordKeystroke = (promptId, e) => {
     const m = metricsRef.current[promptId] || { keystrokes: 0, backspaces: 0, start: 0, last: 0 };
@@ -174,15 +177,16 @@ export default function Writing() {
           setTimeout(() => onTimeUpRef.current(), 0);
           return { ...prev, [index]: 0 };
         }
-        if (next === 60) showToast('1 minute left on this task', 'warning');
+        if (next === 300) showToast('5 minutes left on this task', 'info');
+        else if (next === 60) showToast('1 minute left on this task', 'warning');
         return { ...prev, [index]: next };
       });
     }, 1000);
     return () => clearInterval(id);
   }, [phase, index, data, qSeconds, showToast]);
 
-  // Per-task 2-minute reading/thinking time (fresh for each task).
-  const thinkingLeft = useCountdown(data?.thinkingSeconds ?? 0, {
+  // Per-task reading/thinking time (5 minutes, fresh for each task).
+  const thinkingLeft = useCountdown(thinkSeconds, {
     active: phase === 'thinking',
     resetKey: index,
     onExpire: () => enterWriting(index),
@@ -228,8 +232,8 @@ export default function Writing() {
           <Typography variant="h5" gutterBottom>Writing Assessment</Typography>
           <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 560, mx: 'auto', mb: 2 }}>
             You get <strong>2 real-world tasks</strong> — a customer email and one other message. For each
-            task you first get <strong>2 minutes to read &amp; plan</strong> (no typing), then{' '}
-            <strong>6 minutes to write it</strong>. The answer box starts with an <strong>outline to fill
+            task you first get <strong>{thinkMinutes} minutes to read &amp; plan</strong> (no typing), then{' '}
+            <strong>{qMinutes} minutes to write it</strong>. The answer box starts with an <strong>outline to fill
             in</strong>. You can go <strong>back</strong> to a task while it still has time. Your work
             auto-saves. The test runs in fullscreen — leaving it gives a warning (3 allowed).
           </Typography>
@@ -288,10 +292,10 @@ export default function Writing() {
           <Box>
             <Typography variant="h6">Task {index + 1} of {prompts.length} — read &amp; plan</Typography>
             <Typography variant="body2" color="text.secondary">
-              Read the scenario. Writing (and the 6-minute timer) starts when this ends — or press the button.
+              Read the scenario. Writing (and the {qMinutes}-minute timer) starts when this ends — or press the button.
             </Typography>
           </Box>
-          <CircularTimer secondsLeft={thinkingLeft} totalSeconds={data.thinkingSeconds} label="Think time" />
+          <CircularTimer secondsLeft={thinkingLeft} totalSeconds={thinkSeconds} label="Think time" />
         </Paper>
 
         <Card sx={{ mb: 2 }}>

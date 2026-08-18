@@ -39,7 +39,7 @@ const SECTIONS = [
     title: 'Writing',
     icon: <EditNoteIcon fontSize="large" sx={{ color: '#7b1fa2' }} />,
     detail: {
-      1: '2 professional writing tasks · 5 minutes each · auto-saved.',
+      1: '2 professional writing tasks · 5 min to read + 10 min to write each · auto-saved.',
       2: 'A live customer escalation and an incident report, marked hardest on completeness.',
     },
   },

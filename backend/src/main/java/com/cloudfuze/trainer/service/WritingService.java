@@ -89,9 +89,15 @@ public class WritingService {
     private static final List<String> DEFAULT_OUTLINE = List.of(
             "Clear opening", "Key details and context", "Your main point or request", "Professional closing");
 
-    private static final int THINKING_SECONDS = 120;  // 2 minutes to read & plan before writing
-    private static final int OVERALL_SECONDS = 720;   // 12 minutes of writing
-    private static final int QUESTION_SECONDS = 360;  // 6 minutes each (2 tasks) → 14 min total with thinking
+    // Per TASK, and there are always two of them (one email + one other), so an attempt is
+    // 2 x (5 + 10) = 30 minutes. Reading was 2 minutes and writing 6; both were raised because
+    // candidates were running out of time on the writing tasks rather than being measured by them.
+    private static final int THINKING_SECONDS = 300;  // 5 minutes to read & plan, fresh for each task
+    private static final int QUESTION_SECONDS = 600;  // 10 minutes to write each task
+    // The sum of the per-task writing time. Sent to the client for completeness but NOT used by it:
+    // the writing screen runs a banked per-task timer and has no overall countdown. Keep it equal to
+    // QUESTION_SECONDS x the number of tasks so it never reads as a second, contradictory budget.
+    private static final int OVERALL_SECONDS = 1200; // 20 minutes of writing across the two tasks
     private static final int EMAIL_MIN_WORDS = 60;    // a complete customer email
     private static final int OTHER_MIN_WORDS = 40;    // a complete internal message
     // Level 2 tasks ask for materially more — a full escalation reply and a structured
