@@ -1490,31 +1490,61 @@ JOIN listening_story s ON s.level = 2 AND s.title = 'The Atlas Cutover'
 WHERE NOT EXISTS (
     SELECT 1 FROM listening_question lq JOIN listening_story ls ON ls.id = lq.story_id WHERE ls.level = 2);
 
--- ---------- Level 2 speaking: 10 sentences, two lines minimum ----------
--- One set of 10: migration terminology + business idiom + spoken figures in dollars.
+-- ---------- One-time refresh of the Level 2 speaking and writing banks ----------
+-- Both blocks below seed only when their level is empty, so a database that already holds the
+-- old content would never see this rewrite. Clearing it once lets them reseed. The marker stops
+-- it repeating, so an edit made later directly in the database is not wiped on the next boot --
+-- the same rule as the team placements above. Bump to -v3 to push another content revision.
+--
+-- Safe to delete: nothing references these rows. speaking_sentence has no foreign keys pointing
+-- at it, and a submitted attempt stores the sentence text inside section_result.details, so past
+-- feedback still shows the sentence as it was on the day.
+DELETE FROM speaking_sentence WHERE level = 2
+  AND NOT EXISTS (SELECT 1 FROM seed_state WHERE seed_key = 'l2-content-v2');
+DELETE FROM writing_prompt WHERE level = 2
+  AND NOT EXISTS (SELECT 1 FROM seed_state WHERE seed_key = 'l2-content-v2');
+INSERT INTO seed_state (seed_key) VALUES ('l2-content-v2') ON CONFLICT DO NOTHING;
+
+-- ---------- Level 2 speaking: 10 sentences that build up ----------
+-- Ordered shortest to longest, roughly 8 words up to 32, so a candidate warms up instead of
+-- meeting the hardest sentence first. Level 1 averages about 13 words, so this starts just
+-- above it and ends around twice that.
+--
+-- Deliberately plain professional English. The previous set was built from business idiom --
+-- green-light, kick the tires, boil the ocean, in the weeds, drop the ball -- plus jargon like
+-- delta pass, four-oh-one and eDiscovery, in 40-plus word sentences. Idiom is the hardest thing
+-- for a non-native speaker and none of it measures whether someone communicates clearly at
+-- work; for the freshers taking this, it tested vocabulary they have never been taught. Keep
+-- new sentences to words a first-year employee would already know.
 INSERT INTO speaking_sentence (created_at, updated_at, text, set_number, level, difficulty)
-SELECT now(), now(), v.text, 1, 2, 'HARD'
+SELECT now(), now(), v.text, 1, 2, 'MEDIUM'
 FROM (VALUES
-    ('Before we green-light the cutover I need a ballpark on the delta pass, because if the Graph API keeps throttling us at four hundred requests a minute we are looking at roughly eighteen more hours and about twelve thousand dollars of overtime that nobody has budgeted for.'),
-    ('The client wants to kick the tires on a proof of concept first, so we will pre-stage two hundred and forty gigabytes from their Google shared drives into SharePoint, run a dry pass over the weekend, and circle back on Monday morning with the reconciliation report.'),
-    ('Heads-up on their legacy Box tenant: the groups are nested four levels deep, and if we map those permissions one-to-one we will blow straight past the five-thousand-member ceiling, so let us flatten the access lists before somebody drops the ball on go-live.'),
-    ('I do not want to boil the ocean here, so we migrate the finance department''s forty-two terabytes first, validate every checksum against the source, and only then spin up the remaining eight hundred seats at nineteen dollars per user per month.'),
-    ('We hit a wall with the service account overnight: the admin consent had quietly lapsed, every delta sync came back with a four-oh-one, and roughly nine hundred item-level errors are now sitting in the remediation queue waiting on somebody''s approval.'),
-    ('To be blunt, the timeline is not realistic, because if procurement cannot turn the statement of work around by Thursday the migration window slips past quarter-end and we forfeit the thirty-thousand-dollar early-completion credit we already quoted them.'),
-    ('Let me loop in the security team before anyone touches the retention policies, because anything under legal hold has to survive the move byte for byte, and eDiscovery will absolutely audit us on it two or three months down the line.'),
-    ('The user experience matters far more than raw throughput on this one, because if people log in on Monday and every shared link is broken, it will not matter that we moved sixty terabytes in a single weekend — they will call it a failed migration.'),
-    ('Quick win worth flagging on the status call: switching to incremental passes cut our reprocessing by about thirty-eight percent, which claws back nearly four thousand dollars of compute and buys us a full day of buffer before the hard stop.'),
-    ('I will be straight with you — we are in the weeds on the path-length failures, so I would rather push the announcement by forty-eight hours than promise a clean cutover and then spend the next fortnight apologising to their executive sponsor.')
+    ('The team finished the migration early this morning.'),
+    ('All the shared folders are now available in Microsoft Teams.'),
+    ('Please check the folder permissions before we begin the final transfer.'),
+    ('The customer would like a short update, so I will send one this afternoon.'),
+    ('A few files have very long names, and we will rename them before moving them across.'),
+    ('The first test moved two hundred user accounts without a single error, so we are ready for the full migration.'),
+    ('If the customer approves the plan today, we can start on Friday evening and finish before the office opens on Monday.'),
+    ('I want to explain the delay clearly: the account permission expired overnight, the transfer stopped, and our team restarted it early this morning.'),
+    ('After the move, we checked every folder, compared the file counts with the original system, and confirmed that all the documents and dates matched correctly.'),
+    ('Before we tell the customer that the work is complete, I would like one more check of the shared links, because a broken link is the first thing people notice on Monday morning.')
     ) AS v(text)
 WHERE NOT EXISTS (SELECT 1 FROM speaking_sentence WHERE level = 2);
 
--- ---------- Level 2 writing: 2 advanced tasks ----------
+-- ---------- Level 2 writing: 2 tasks, a step above Level 1 rather than a wall ----------
+-- The previous pair were 150-word scenarios carrying six or seven simultaneous requirements --
+-- "cover summary, timeline, root cause, impact including cost, what was done, and prevention,
+-- one of which must change an existing assumption". That is a senior consultant's exercise, and
+-- freshers froze at it. These keep the step up from Level 1 -- a real situation, several things
+-- to cover, a professional tone to hold -- but the scenario is short enough to read once and
+-- the requirements are four plain instructions.
 INSERT INTO writing_prompt (created_at, updated_at, category, prompt, level, difficulty)
-SELECT now(), now(), v.category, v.prompt, 2, 'HARD'
+SELECT now(), now(), v.category, v.prompt, 2, 'MEDIUM'
 FROM (VALUES
     ('Customer Email',
-     'You are the migration lead for Atlas Freight. It is 08:15 on Monday, the first working day after the cutover. Their CIO, Marcus Bell, has emailed you in plain frustration: 3,100 files are missing for his logistics team, and two of his managers have already escalated to your VP. The cause is the path-length limit — those files exceeded the destination''s 400-character path and were parked in a remediation queue rather than lost. Your team can restore them in batches by 18:00 Tuesday, and CloudFuze has approved a $7,500 service credit. Write the reply to Marcus. Explain the cause without hiding behind jargon, commit to a specific ETA and owner, offer the credit, say what prevents a repeat, and give him one clear next step.'),
-    ('Incident Report',
-     'Write the internal incident report for the Atlas Freight throughput stall. The facts: the tenant was frozen 21:40 Friday; the first six hours moved 1.4 million items with zero failures; throughput then fell from 900 GB/hour to under 200 GB/hour; an engineer proposed adding four agents, but the logs showed a single flat folder of 190,000 files being re-enumerated on every pass, so more agents would have worsened it; excluding that drive restored throughput within 40 minutes; the cutover still closed 06:10 Sunday, four hours inside the window, at $7,500 over the $46,000 budget. Cover: one-line summary, timeline, root cause, impact including cost, what was done, and the prevention measures — one of which must change an existing assumption, not just add a check.')
+     'After a migration, a customer has emailed to say that about forty files are missing from their sales folder. The files are not lost. They had very long names, so they were moved into a separate folder, and your team will restore them by tomorrow evening. Write a reply to the customer. Explain in simple words what happened, give a clear day and time for the fix, say who is doing it, and apologise once.'),
+    ('Status Update',
+     'Write a short status update for your manager about a migration that is running one day behind. The delay happened because the customer sent their list of users two days later than agreed. The work is now seventy percent complete and will finish on Thursday. Cover what is finished, why it is late, when it will finish, and one thing you need from your manager.')
     ) AS v(category, prompt)
 WHERE NOT EXISTS (SELECT 1 FROM writing_prompt WHERE level = 2);
