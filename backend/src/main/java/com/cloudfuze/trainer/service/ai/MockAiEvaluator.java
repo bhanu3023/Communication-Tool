@@ -39,8 +39,10 @@ public class MockAiEvaluator {
         double fluency = accuracy * (0.6 + 0.4 * lengthRatio);
         double confidence = accuracy * (0.7 + 0.3 * lengthRatio);
 
-        // Same weighting as the real evaluator, so a quota lapse cannot silently change how
-        // hard the test is. See AiService.weightedOverall for why accuracy carries it.
+        // Same weighting as the real evaluator, so a quota lapse cannot silently change how hard
+        // the test is. See AiService.weightedOverall for why the English dimensions carry it.
+        // Note this fallback derives every dimension from string overlap, so it cannot tell good
+        // English from an exact echo -- it keeps a candidate scored during an outage, nothing more.
         double overall = AiService.weightedOverall(
                 pronunciation, accuracy, fluency, grammar, vocabulary, confidence);
 

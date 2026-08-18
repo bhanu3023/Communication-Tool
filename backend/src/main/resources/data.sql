@@ -1505,30 +1505,53 @@ DELETE FROM writing_prompt WHERE level = 2
   AND NOT EXISTS (SELECT 1 FROM seed_state WHERE seed_key = 'l2-content-v2');
 INSERT INTO seed_state (seed_key) VALUES ('l2-content-v2') ON CONFLICT DO NOTHING;
 
--- ---------- Level 2 speaking: 10 sentences that build up ----------
--- Ordered shortest to longest, roughly 8 words up to 32, so a candidate warms up instead of
--- meeting the hardest sentence first. Level 1 averages about 13 words, so this starts just
--- above it and ends around twice that.
+-- Level 2 speaking, migration-English revision. Its own marker rather than bumping the two above,
+-- which would also delete and reseed the Level 2 writing prompts for a change that does not touch
+-- them. Bump to -v2 to push a further speaking revision.
+DELETE FROM speaking_sentence WHERE level = 2
+  AND NOT EXISTS (SELECT 1 FROM seed_state WHERE seed_key = 'l2-speaking-migration-v1');
+INSERT INTO seed_state (seed_key) VALUES ('l2-speaking-migration-v1') ON CONFLICT DO NOTHING;
+
+-- ---------- Level 2 speaking: 10 migration sentences, one line up to three and a half ----------
+-- Ordered shortest to longest so a candidate warms up instead of meeting the hardest sentence
+-- first. Position within a set IS the order the candidate sees (SpeakingSetService reads them by
+-- id). The gradient runs 13 words to 57 -- one full sentence up to about three and a half lines.
 --
--- Deliberately plain professional English. The previous set was built from business idiom --
--- green-light, kick the tires, boil the ocean, in the weeds, drop the ball -- plus jargon like
--- delta pass, four-oh-one and eDiscovery, in 40-plus word sentences. Idiom is the hardest thing
--- for a non-native speaker and none of it measures whether someone communicates clearly at
--- work; for the freshers taking this, it tested vocabulary they have never been taught. Keep
--- new sentences to words a first-year employee would already know.
+-- The previous set opened at two words ("Outstanding work!"). Two words is not a speaking test:
+-- there is no clause to hold together, nothing to breathe through and nothing to lose your place
+-- in, so the first item measured almost nothing and read as a warm-up rather than a question.
+-- Every item is now a complete sentence a colleague could actually say at work.
+--
+-- EVERY sentence is migration work. This is what the company does and what the candidate will be
+-- speaking about on a customer call, so the vocabulary they rehearse here is vocabulary they will
+-- reuse. Nothing is drawn from daily conversation.
+--
+-- Several carry the standard US project terminology that runs through those calls -- kickoff call,
+-- scope, sign-off, cutover, downtime window, go-live, ticket, escalate, service level agreement,
+-- stakeholder, maintenance window, rollout, checkpoint call, staging. These are learnable, they
+-- are used in writing as well as speech, and a fresher who cannot say them cannot follow a status
+-- call. That is NOT a return to the idiom set that was removed earlier -- green-light, kick the
+-- tires, boil the ocean, in the weeds, delta pass, four-oh-one -- which was obscure rather than
+-- professional and tested vocabulary nobody had been taught. A term stays only if it is named
+-- plainly and a first-year employee would meet it in their first month.
+--
+-- Two are exclamatory (items 5 and 10) so the set still asks for some expression rather than ten
+-- level statements; enthusiasm is a real part of speaking well to a customer.
+--
+-- Avoid apostrophes: these are single-quoted SQL literals.
 INSERT INTO speaking_sentence (created_at, updated_at, text, set_number, level, difficulty)
 SELECT now(), now(), v.text, 1, 2, 'MEDIUM'
 FROM (VALUES
-    ('The team finished the migration early this morning.'),
-    ('All the shared folders are now available in Microsoft Teams.'),
-    ('Please check the folder permissions before we begin the final transfer.'),
-    ('The customer would like a short update, so I will send one this afternoon.'),
-    ('A few files have very long names, and we will rename them before moving them across.'),
-    ('The first test moved two hundred user accounts without a single error, so we are ready for the full migration.'),
-    ('If the customer approves the plan today, we can start on Friday evening and finish before the office opens on Monday.'),
-    ('I want to explain the delay clearly: the account permission expired overnight, the transfer stopped, and our team restarted it early this morning.'),
-    ('After the move, we checked every folder, compared the file counts with the original system, and confirmed that all the documents and dates matched correctly.'),
-    ('Before we tell the customer that the work is complete, I would like one more check of the shared links, because a broken link is the first thing people notice on Monday morning.')
+    ('Our migration kickoff call is scheduled for Monday morning, and every team has confirmed.'),
+    ('Please review the migration scope document carefully and send your sign-off to the project manager before Thursday.'),
+    ('The cutover is planned for Friday night, so users should expect a short downtime window before business hours begin again.'),
+    ('We finished the pilot migration for twenty-five users this week, and every mailbox, shared folder and calendar transferred without a single error.'),
+    ('Excellent news! The go-live finished ahead of schedule, all four thousand user accounts are active, and the customer has already approved our final report.'),
+    ('If the customer raises a ticket after the cutover, please escalate it to the migration lead immediately, because our service level agreement promises a first response within two hours.'),
+    ('Before the next phase begins, we need written approval from every stakeholder, an updated list of active users, and a confirmed maintenance window that does not overlap with the quarterly audit.'),
+    ('I would like to walk you through the migration timeline: discovery finishes next Tuesday, the pilot runs for one week, the full rollout begins on the fifteenth, and we will hold a checkpoint call at the end of every phase.'),
+    ('There is one risk I want to raise early. About six hundred files carry names that are longer than the destination platform allows, so the team will rename them in a staging folder first, and that extra step will add roughly two days to the current schedule.'),
+    ('Thank you all for a very demanding month! The final sync completed overnight, every shared link has been verified, and the customer signed off on the project this morning. Please make sure the closure report and the updated user inventory are uploaded to the shared drive before Friday, because the account team presents the results next week.')
     ) AS v(text)
 WHERE NOT EXISTS (SELECT 1 FROM speaking_sentence WHERE level = 2);
 

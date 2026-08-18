@@ -24,8 +24,14 @@ import java.util.Map;
 @Service
 public class SpeakingService {
 
-    private static final int OVERALL_SECONDS = 600;   // 10 minutes total
-    private static final int QUESTION_SECONDS = 60;   // 60 seconds each (10 × 60s = 10 min)
+    // 15 minutes for the section. There is no per-sentence timer -- QUESTION_SECONDS is sent to
+    // the client but the UI deliberately does not run it -- so this single budget is the only
+    // pressure on the candidate. It was 10 minutes when a Level 2 set totalled about 150 words;
+    // the set now runs to roughly 300 (one sentence of 14 words building to one of 57), which is
+    // close to three minutes of speech before anyone reads a line silently or re-records a take.
+    // Ten minutes would have turned a content change into a time trial.
+    private static final int OVERALL_SECONDS = 900;   // 15 minutes total
+    private static final int QUESTION_SECONDS = 60;   // advisory only; the UI runs no per-sentence timer
 
     private final SpeakingSetService speakingSetService;
     private final SessionService sessionService;

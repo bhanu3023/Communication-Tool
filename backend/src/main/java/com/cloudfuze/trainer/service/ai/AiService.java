@@ -45,37 +45,162 @@ public class AiService {
         this.mock = mock;
     }
 
+    /**
+     * Scores one spoken sentence as a test of ENGLISH, from what the transcriber heard.
+     *
+     * <p>This used to be a repetition matcher wearing an examiner's clothes: accuracy — how
+     * exactly the target's words came back — carried 60% of the grade, so the section largely
+     * measured short-term recall. On the Level 2 set that now runs to 57 words, recall is the
+     * wrong thing to measure: a candidate who reproduces the meaning in fluent, correct English
+     * and drops three words has spoken BETTER than one who echoes every word in a broken string.
+     * Grammar, vocabulary and intelligibility now carry 60% between them and accuracy 30%, so the
+     * mark follows the English rather than the echo. See {@link #weightedOverall}.
+     *
+     * <p>The examiner is told what it is actually reading. It never hears the voice: the recording
+     * goes to gpt-4o-transcribe and only that text arrives here, at a measured ~13% word error
+     * rate on real candidate recordings (see .claude/memory/decisions.md). Roughly one word in
+     * eight can therefore be the transcriber's mistake rather than the candidate's, which is why
+     * the prompt asks it to weigh whether a difference is a plausible mishearing before marking
+     * it, and forbids it from asserting anything about pace, hesitation or tone that only the
+     * audio could show. An examiner that does not know its evidence is thin will overstate it.
+     *
+     * <p>The rubric stays accent-fair. These candidates are freshers speaking Indian English,
+     * which is a standard variety of the language and not a defect, so the examiner judges whether
+     * they would be UNDERSTOOD — never how close they sound to an American or British speaker.
+     * Accent-fair is NOT lenient, and the prompt says so: an accent it must ignore, a wrong word
+     * it must mark and name.
+     *
+     * <p>Tips have to teach. A tip that says "you made a grammar mistake" tells a fresher nothing
+     * they can act on, so the examiner must quote what was said, give the corrected form, and hand
+     * back one line to practise aloud. This is the only English coaching most of them get.
+     */
     public SpeakingEvaluation scoreSpeaking(String expected, String transcript) {
         // No speech -> deterministic zero, regardless of provider (don't ask the LLM to score nothing).
         if (transcript == null || transcript.isBlank()) {
             return mock.scoreSpeaking(expected, transcript);
         }
         JsonNode node = openAi.completeJson(
-                "You are a STRICT but fair spoken-English examiner scoring a REPETITION task from an ASR "
-                        + "transcript. Both texts below have already been lowercased with punctuation stripped, "
-                        + "so there is nothing to judge there. The transcript comes from automatic speech "
-                        + "recognition, which normalizes numbers (\"twenty percent\" -> \"20%\"), invents its own "
-                        + "sentence breaks, and makes minor homophone slips — treat THOSE artifacts as CORRECT and "
-                        + "never penalize them. "
-                        + "However, DO penalize genuinely missing, added, or wrong CONTENT words versus the target. "
-                        + "Use the full 0-100 range and do not inflate. Score 0-100: accuracy = how completely the "
-                        + "target's words and meaning were reproduced (missing content words lower it sharply); "
-                        + "grammar and vocabulary = correctness of the words as spoken. IMPORTANT: pronunciation, "
-                        + "fluency and confidence CANNOT be heard from text, so give a moderate neutral estimate "
-                        + "(about 60-75) and NEVER award 90+ for these on transcript alone. Return JSON numeric "
-                        + "fields (0-100): pronunciation, accuracy, fluency, grammar, vocabulary, confidence, and a "
-                        + "'suggestions' array of 1-3 short, specific tips.",
+                "You are a STRICT senior English examiner assessing how well a candidate SPEAKS "
+                        + "ENGLISH. They were shown a workplace sentence about a data migration and asked to say "
+                        + "it aloud. You are grading their ENGLISH — grammar, vocabulary, sentence control and "
+                        + "clarity — NOT their memory. Both texts below have been lowercased with punctuation "
+                        + "stripped, so there is nothing to judge there.\n"
+
+                        + "WHAT YOUR EVIDENCE ACTUALLY IS. You have NOT heard the recording. You are reading an "
+                        + "automatic transcript produced by a speech-to-text model measured at about a 13% word "
+                        + "error rate on recordings from these very candidates. That means ROUGHLY ONE WORD IN "
+                        + "EIGHT of the heard line may be the machine's mistake and not the speaker's. Before you "
+                        + "mark any single-word difference, ask whether a transcriber would plausibly produce it "
+                        + "from correct speech. If the heard word is a near-homophone or an acoustic neighbour of "
+                        + "the target, treat it as a transcription artefact and do NOT mark it. Mark a difference "
+                        + "only when it is too large to be a mishearing: a content word plainly absent, a whole "
+                        + "clause missing, or a word that means something else entirely. When you genuinely "
+                        + "cannot tell, favour the candidate and say nothing about it. Breakdown running across "
+                        + "the whole line is real and must be marked; a scattered word here and there is the "
+                        + "machine.\n"
+
+                        + "THESE ARE NEVER MISTAKES and must not cost a mark or earn a tip, because they are the "
+                        + "transcriber's habits rather than the candidate's speech: normalising numbers "
+                        + "(\"twenty percent\" -> \"20%\"); its own sentence breaks and capitalisation; and how it "
+                        + "splits or joins a compound word. \"sub folders\" and \"subfolders\", \"on boarding\" "
+                        + "and \"onboarding\", \"any one\" and \"anyone\" are the same word spoken aloud: nobody "
+                        + "pronounces a hyphen or a space, so treat them as an exact match and say nothing. A "
+                        + "homophone is forgiven ONLY when the meaning is identical; if the substituted word "
+                        + "means something else, it is a mistake and must be marked.\n"
+
+                        + "GRAMMAR AND VOCABULARY ARE THE HEART OF THIS MARK and are scored ON THE SENTENCE AS "
+                        + "HEARD, NOT on the target. Read the heard line completely on its own, as though you had "
+                        + "never seen the target, and ask: is this grammatical, natural, sensible English that a "
+                        + "colleague could act on? Judge tense agreement, articles, plurals, prepositions, word "
+                        + "order and connectives. If it is not clean English, grammar CANNOT be 100 — lower it in "
+                        + "proportion to how broken it is; the same for vocabulary when words are used wrongly, "
+                        + "imprecisely or nonsensically. The target being well written earns the candidate "
+                        + "NOTHING here. Do NOT reason that a fault 'is a repetition error, not a grammar error' "
+                        + "and hand back full marks: a listener hears only what was said.\n"
+
+                        + "ACCURACY is the SMALLER part of this mark and means: did the MEANING of the target "
+                        + "survive? Judge the message, not the wording. A candidate who kept every fact and every "
+                        + "instruction in their own correct words scores HIGH here even when the phrasing differs "
+                        + "— do not punish a synonym or a reordered clause. Deduct when facts, names, numbers, "
+                        + "dates or whole instructions are lost. SCORE PROPORTIONALLY: reserve 0 for a response "
+                        + "with nothing recognisable from the target, and place a partial answer in between in "
+                        + "proportion to how much meaning survived. The later sentences in this set run past "
+                        + "fifty words; on those, dropping a minor detail is normal and is not a collapse.\n"
+
+                        + "PRONUNCIATION here means INTELLIGIBILITY, the one thing about the voice this "
+                        + "transcript can honestly evidence: the transcriber is accent-robust, so a target word "
+                        + "it recovered was clear enough to be understood. Award 90-95 when essentially every "
+                        + "target word came back; deduct for each target word that returned as a different, "
+                        + "similar-sounding word AND name it. Never exceed 95 — finer detail cannot be heard from "
+                        + "text.\n"
+
+                        + "FLUENCY and CONFIDENCE cannot be observed in a transcript at all. Give a moderate "
+                        + "neutral estimate (about 65-75) for both and NEVER award 90+ on transcript alone. Do "
+                        + "NOT write a tip claiming they paused, rushed, hesitated, mumbled, sounded nervous or "
+                        + "spoke too quietly — you have not heard the recording, and inventing that is a claim "
+                        + "the candidate cannot check.\n"
+
+                        + "THE SPEAKER IS AN INDIAN ENGLISH SPEAKER, EARLY IN THEIR CAREER. Indian English is a "
+                        + "standard variety of English, not an error. Judge whether a colleague would UNDERSTAND "
+                        + "them, never how close they sound to an American or British speaker. You must NOT "
+                        + "deduct for, or comment on: the accent, mother-tongue influence, syllable-timed rhythm "
+                        + "or intonation, v/w, th/d/t, p/f or retroflex consonants, or Indian English wording "
+                        + "that is normal in Indian business usage. Never tell them to sound native, neutral, "
+                        + "American or British, and never use the words 'accent' or 'mother tongue'. Being fair "
+                        + "about the accent is not being lenient about the English.\n"
+
+                        + "USE THE FULL 0-100 RANGE AND DO NOT INFLATE. Bands for grammar and vocabulary: 90-100 "
+                        + "clean, natural professional English; 75-89 correct with a slip or two; 60-74 "
+                        + "understandable but with clear errors; 40-59 effortful, several errors; below 40 "
+                        + "broken. A genuinely strong answer must be able to reach the 90s — do not shave marks "
+                        + "off a good one just to look strict.\n"
+
+                        + "NOW COACH THEM. Return a 'suggestions' array of 2 to 4 tips. This feedback is the only "
+                        + "English teaching most of these candidates receive, so every tip must be something they "
+                        + "can DO. Rules for tips:\n"
+                        + "1. Open with ONE tip naming a real strength in THIS answer, quoting the part they "
+                        + "handled well. Never vague praise like 'good job' — say what was good and why it "
+                        + "worked.\n"
+                        + "2. For each fault, QUOTE what they said, give the CORRECTED form in quotes, and add a "
+                        + "short reason a colleague would understand — you said X, say Y instead, because Z.\n"
+                        + "3. Finish with ONE line they can practise ALOUD: eight to fifteen words using the word "
+                        + "or structure they got wrong, in the same migration context, so they leave with "
+                        + "something to rehearse.\n"
+                        + "4. If the answer really was faultless, say so plainly in the first tip, name the "
+                        + "hardest part they got right, and still leave them one harder line to practise.\n"
+                        + "5. Speak TO the candidate as 'you'. Be warm, specific and direct. No jargon, no "
+                        + "examiner-speak, and never restate the score.\n"
+                        + "NEVER write a tip about spelling, hyphens, spacing, capitalisation or how a word was "
+                        + "written down. The candidate is SPEAKING, not typing: they cannot pronounce a hyphen "
+                        + "and they did not choose how the transcriber spelled anything.\n"
+                        + "Return JSON numeric fields (0-100): pronunciation, accuracy, fluency, grammar, "
+                        + "vocabulary, confidence, plus the 'suggestions' array.",
                 "Target sentence: \"" + forComparison(expected) + "\"\n"
-                        + "Recognized transcript: \"" + forComparison(transcript) + "\"");
+                        + "Heard in the recording: \"" + forComparison(transcript) + "\"");
         if (node == null) {
             return mock.scoreSpeaking(expected, transcript);
         }
         double pronunciation = num(node, "pronunciation");
         double accuracy = num(node, "accuracy");
         double fluency = num(node, "fluency");
-        double grammar = num(node, "grammar");
-        double vocabulary = num(node, "vocabulary");
         double confidence = num(node, "confidence");
+        // Grammar and vocabulary are capped relative to accuracy. Between them they now carry 40%
+        // of the grade -- more than before -- and the examiner kept awarding 100 for both on
+        // utterances that were plainly broken -- "has the migration from slack to and also
+        // something else" scored 100/100 -- reasoning that a repetition slip is not a grammar
+        // fault. That quietly rescued answers that should have failed. Saying so in the prompt
+        // worked on some sentences and not others, so the ceiling is enforced here rather than
+        // left to the model's mood, and it matters more now that these two lead the mark.
+        //
+        // The slack is deliberate, and the wider accuracy definition makes it more generous than it
+        // looks: accuracy now scores whether the MEANING survived, so a candidate who conveys the
+        // whole message in their own words scores high on it and the cap never engages. It bites
+        // only when meaning was genuinely lost -- someone who says less than the target can still
+        // say it grammatically, so these may sit above accuracy, just not at full marks while the
+        // answer itself was hollow. On a full read the cap is off the top of the scale.
+        double ceiling = accuracy + 25;
+        double grammar = Math.min(num(node, "grammar"), ceiling);
+        double vocabulary = Math.min(num(node, "vocabulary"), ceiling);
         double overall = weightedOverall(pronunciation, accuracy, fluency, grammar, vocabulary, confidence);
         return new SpeakingEvaluation(round(pronunciation), round(accuracy), round(fluency),
                 round(grammar), round(vocabulary), round(confidence), overall, strings(node, "suggestions"));
@@ -84,29 +209,39 @@ public class AiService {
     /**
      * Combines the six sub-scores into the section score.
      *
-     * <p>The weighting follows what can actually be evidenced. Pronunciation, fluency and
-     * confidence cannot be judged from a transcript, so the examiner prompt holds them at a
-     * neutral estimate near 70 — and while they carried 55% of the grade between them, that
-     * constant capped a FLAWLESS answer at about 83.5. Level 2 passes at 80, so a perfect
-     * candidate cleared it by 3.5 points and a single misheard word failed them. The bar was not
-     * strict, it was barely reachable.
+     * <p>Two constraints shape this. First, only some dimensions can be evidenced: pronunciation,
+     * fluency and confidence are judged from a transcript, not the voice, so the prompt holds
+     * fluency and confidence at a neutral ~70 and caps pronunciation at 95. A dimension pinned to
+     * a constant cannot carry much weight without deciding the outcome by itself — when those
+     * three carried 55%, that constant capped a FLAWLESS answer at about 83.5 against a Level 2
+     * pass mark of 80, so the bar was not strict, it was barely reachable.
      *
-     * <p>Weight now sits on accuracy — did they say the target's words — with grammar and
-     * vocabulary secondary, and the three unmeasurable dimensions kept at a token 10% so they
-     * still appear in feedback without deciding the outcome. A flawless answer now scores about
-     * 97, so 75 and 80 become real bars rather than near-impossible ones.
+     * <p>Second, this is a test of ENGLISH. Weight sat on accuracy at 60%, which made the section
+     * a repetition matcher: it mostly measured whether the candidate could echo the target's exact
+     * words, and someone who conveyed the whole message in their own correct English scored below
+     * someone who parroted the words in a broken string. That is backwards for a section whose
+     * purpose is to find out how well they speak. On the Level 2 set, which now runs to 57 words,
+     * exact recall is not even a reasonable thing to ask.
      *
-     * <p>If real pronunciation scoring is ever restored (it needs a service that hears the
-     * voice), these weights should move back toward the original rubric.
+     * <p>So the English carries the mark: grammar (22) and vocabulary (18) judged on the sentence
+     * as actually spoken, plus intelligibility (20), is 60% between them. Accuracy keeps 30% —
+     * meaning preserved, not wording matched — and fluency and confidence keep a token 10% so they
+     * still appear in feedback without deciding anything. A flawless answer scores about 96, so 75
+     * and 80 stay clearable; a fluent-but-lossy answer can now pass, and a word-perfect but broken
+     * one cannot.
+     *
+     * <p>If real pronunciation scoring is ever restored (it needs a service that hears the voice,
+     * which {@link #scoreSpeakingFromAudio} is not), pronunciation should take more of the weight
+     * back from accuracy.
      */
     static double weightedOverall(double pronunciation, double accuracy, double fluency,
                                   double grammar, double vocabulary, double confidence) {
-        return round(accuracy * 0.60
-                + grammar * 0.15
-                + vocabulary * 0.15
-                + pronunciation * 0.05
-                + fluency * 0.03
-                + confidence * 0.02);
+        return round(accuracy * 0.30
+                + grammar * 0.22
+                + vocabulary * 0.18
+                + pronunciation * 0.20
+                + fluency * 0.05
+                + confidence * 0.05);
     }
 
     /**
