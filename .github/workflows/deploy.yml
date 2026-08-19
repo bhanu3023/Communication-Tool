@@ -1,0 +1,150 @@
+name: Deploy to production
+
+# Automatic on every push to main; workflow_dispatch lets you re-run the current
+# commit by hand without needing a new push.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+env:
+  # Checked from the server itself (not the public IP) so this never depends on
+  # outbound firewall rules or DNS — see DEPLOY_NOTES.md for why the proxy runs
+  # on 9443 with a self-signed cert (client_max_body_size / long-recording notes).
+  HEALTH_URL: "https://127.0.0.1:9443/"
+
+jobs:
+  lint:
+    name: Syntax / build check (fails fast, touches nothing)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate docker-compose.yml
+        run: docker compose config --quiet
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      - name: Backend compiles
+        run: mvn -q -B -f backend/pom.xml compile -DskipTests
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Frontend builds
+        working-directory: frontend
+        run: |
+          npm install --legacy-peer-deps
+          npm run build
+
+  deploy:
+    name: Deploy over SSH
+    needs: lint
+    runs-on: ubuntu-latest
+    outputs:
+      result: ${{ steps.run-deploy.outputs.result }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Package the release
+        run: git archive --format=tar -o release.tar HEAD
+
+      - name: Set up deploy SSH key
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -p "${{ secrets.DEPLOY_PORT }}" "${{ secrets.DEPLOY_HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Copy release to server
+        run: |
+          scp -i ~/.ssh/deploy_key -P "${{ secrets.DEPLOY_PORT }}" -o StrictHostKeyChecking=yes \
+            release.tar "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:/tmp/release-${{ github.run_id }}.tar"
+
+      - name: Run remote deploy (overlay, backup, build, swap, health-check, auto-rollback)
+        id: run-deploy
+        run: |
+          set +e
+          ssh -i ~/.ssh/deploy_key -p "${{ secrets.DEPLOY_PORT }}" -o StrictHostKeyChecking=yes \
+            "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" \
+            "bash ${{ secrets.DEPLOY_PATH }}/.github/deploy/deploy-remote.sh \
+              '${{ secrets.DEPLOY_PATH }}' \
+              '/tmp/release-${{ github.run_id }}.tar' \
+              '${{ env.HEALTH_URL }}'" | tee deploy-output.log
+          SSH_EXIT=${PIPESTATUS[0]}
+          RESULT=$(grep -o 'DEPLOY_RESULT=[a-z_:]*' deploy-output.log | tail -1 | cut -d= -f2)
+          echo "result=${RESULT:-failed:unknown}" >> "$GITHUB_OUTPUT"
+          [ "$SSH_EXIT" -eq 0 ] && [ "${RESULT:-}" = "success" ]
+
+      - name: Job summary
+        if: always()
+        run: |
+          {
+            echo "## Deploy result: \`${{ steps.run-deploy.outputs.result }}\`"
+            echo
+            echo '```'
+            cat deploy-output.log
+            echo '```'
+            if [ "${{ steps.run-deploy.outputs.result }}" != "success" ]; then
+              echo
+              echo "### What happens next"
+              echo "- The server already rolled back to the previous version automatically (Layer 1, see log above)."
+              echo "- A follow-up job will push an auto-revert commit to \`main\` with a full incident report and manual-rollback instructions in its commit message."
+              echo "- If a DB migration partially applied before this failure, it is **not** undone by any of this — check the DB manually."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  auto-revert:
+    name: Auto-revert broken deploy
+    needs: deploy
+    if: always() && needs.deploy.result == 'failure'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: main
+
+      - name: Build and push the revert commit
+        id: revert
+        env:
+          BEFORE: ${{ github.event.before || '0000000000000000000000000000000000000000' }}
+          SHA: ${{ github.sha }}
+          # e.g. "failed:build", "failed:backup", "failed:health_check" — the exact stage
+          # from deploy-remote.sh, so the incident report names the real cause, not a guess.
+          DEPLOY_RESULT: ${{ needs.deploy.outputs.result }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          bash .github/deploy/auto-revert.sh
+
+      - name: Push revert commit to main
+        env:
+          # Falls back to the default token; set repo secret REVERT_PUSH_TOKEN to a
+          # fine-grained PAT instead if branch protection on main blocks the bot.
+          TOKEN: ${{ secrets.REVERT_PUSH_TOKEN || github.token }}
+        run: |
+          git remote set-url origin "https://x-access-token:${TOKEN}@github.com/${{ github.repository }}.git"
+          git push origin HEAD:main
+
+      - name: Job summary
+        if: always()
+        run: |
+          {
+            echo "## Auto-revert pushed to main"
+            echo
+            echo "This push re-triggers the deploy workflow automatically with the known-good code."
+            echo
+            echo "Full incident report and manual recovery steps are in the revert commit's own message:"
+            echo '```'
+            git log -1 --format=%B
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
