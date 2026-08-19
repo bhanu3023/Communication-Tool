@@ -12,6 +12,8 @@ env:
   # outbound firewall rules or DNS — see DEPLOY_NOTES.md for why the proxy runs
   # on 9443 with a self-signed cert (client_max_body_size / long-recording notes).
   HEALTH_URL: "https://127.0.0.1:9443/"
+  # Not a secret — just a directory path on the server, not a credential.
+  DEPLOY_PATH: "/root/apps/Communication-Tool"
 
 jobs:
   lint:
@@ -57,9 +59,9 @@ jobs:
       - name: Set up deploy SSH key
         run: |
           mkdir -p ~/.ssh
-          printf '%s\n' "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          printf '%s\n' "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
-          ssh-keyscan -p "${{ secrets.DEPLOY_PORT }}" "${{ secrets.DEPLOY_HOST }}" >> ~/.ssh/known_hosts
+          ssh-keyscan -p "${{ secrets.SSH_PORT }}" "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts
 
       - name: Copy release and deploy script to server
         run: |
@@ -67,19 +69,19 @@ jobs:
           # inside the deploy path — that path's checkout predates this workflow (and,
           # more generally, the script shouldn't have to already exist there before the
           # overlay that would place it runs).
-          scp -i ~/.ssh/deploy_key -P "${{ secrets.DEPLOY_PORT }}" -o StrictHostKeyChecking=yes \
-            release.tar "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:/tmp/release-${{ github.run_id }}.tar"
-          scp -i ~/.ssh/deploy_key -P "${{ secrets.DEPLOY_PORT }}" -o StrictHostKeyChecking=yes \
-            .github/deploy/deploy-remote.sh "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:/tmp/deploy-remote-${{ github.run_id }}.sh"
+          scp -i ~/.ssh/deploy_key -P "${{ secrets.SSH_PORT }}" -o StrictHostKeyChecking=yes \
+            release.tar "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/tmp/release-${{ github.run_id }}.tar"
+          scp -i ~/.ssh/deploy_key -P "${{ secrets.SSH_PORT }}" -o StrictHostKeyChecking=yes \
+            .github/deploy/deploy-remote.sh "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/tmp/deploy-remote-${{ github.run_id }}.sh"
 
       - name: Run remote deploy (overlay, backup, build, swap, health-check, auto-rollback)
         id: run-deploy
         run: |
           set +e
-          ssh -i ~/.ssh/deploy_key -p "${{ secrets.DEPLOY_PORT }}" -o StrictHostKeyChecking=yes \
-            "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" \
+          ssh -i ~/.ssh/deploy_key -p "${{ secrets.SSH_PORT }}" -o StrictHostKeyChecking=yes \
+            "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" \
             "bash /tmp/deploy-remote-${{ github.run_id }}.sh \
-              '${{ secrets.DEPLOY_PATH }}' \
+              '${{ env.DEPLOY_PATH }}' \
               '/tmp/release-${{ github.run_id }}.tar' \
               '${{ env.HEALTH_URL }}'; rm -f /tmp/deploy-remote-${{ github.run_id }}.sh" 2>&1 | tee deploy-output.log
           SSH_EXIT=${PIPESTATUS[0]}
@@ -94,7 +96,7 @@ jobs:
             echo "## Deploy result: \`${{ steps.run-deploy.outputs.result }}\`"
             echo
             echo '```'
-            cat deploy-output.log
+            cat deploy-output.log 2>/dev/null || echo "(no output captured — an earlier step, e.g. SSH setup or the scp copy, never ran or failed before producing any log)"
             echo '```'
             if [ "${{ steps.run-deploy.outputs.result }}" != "success" ]; then
               echo
