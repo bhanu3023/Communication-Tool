@@ -333,36 +333,108 @@ public class AiService {
                 round(grammar), round(vocabulary), round(confidence), overall, strings(node, "suggestions"));
     }
 
+    /**
+     * Scores one written response at the level of a first-year employee who is still learning.
+     *
+     * <p>The examiner used to be a "STRICT senior business-writing examiner" who was told to
+     * HEAVILY penalise. Marked to that standard, a piece of writing a manager would happily send
+     * after two small edits came back in the fifties, and the candidate learned only that they
+     * had failed. These are freshers; the section exists to teach them, so the bar is now a
+     * competent first-year employee rather than a consultant, and the tone is developmental.
+     *
+     * <p>Easier is not the same as vague. The single biggest source of harsh marks was not the
+     * bands but the arithmetic: the section score is a flat average of TEN fields, so one
+     * clumsy sentence marked down under grammar AND clarity AND tone AND professionalism AND
+     * readability moved the average four times for one fault. The prompt now says explicitly
+     * that each fault belongs to the field it actually concerns.
+     *
+     * <p><strong>Indian English is handled differently here than in speaking, deliberately.</strong>
+     * {@link #scoreSpeaking} forbids the examiner from deducting for an accent, because an
+     * accent is how a person sounds and is not an error. Writing has no accent. What it has is
+     * usage — "do the needful", "revert back", "kindly", "prepone", "the same" — which is
+     * perfectly correct Indian business English but reads as odd or unclear to the American
+     * customers this company writes to. That is a learnable, teachable difference, so these are
+     * named and corrected, with a small mark impact and never a lecture. Same principle in both
+     * places: never mark WHO someone is, do teach what the reader needs.
+     */
     public WritingEvaluation scoreWriting(String category, String prompt, String content) {
         // No response -> deterministic zero, regardless of provider.
         if (content == null || content.isBlank()) {
             return mock.scoreWriting(category, prompt, content);
         }
         JsonNode node = openAi.completeJson(
-                "You are a STRICT senior business-writing examiner at a software company. The candidate was given a "
-                        + "workplace SITUATION and a task (often a customer email or an internal message) and wrote a "
-                        + "response. Score HONESTLY and use the FULL 0-100 range — do NOT inflate. Bands: 90-100 "
-                        + "excellent, ready to send as-is; 75-89 good, minor fixes; 60-74 acceptable but with "
-                        + "noticeable issues; 40-59 weak, would reflect badly on the company; 20-39 poor; 0-19 empty, "
-                        + "off-topic or unusable. Score each field 0-100: grammar, spelling, clarity, vocabulary, "
-                        + "tone (correct for the audience — warm and reassuring for customers, crisp and urgent for "
-                        + "internal escalations), professionalism, structure (greeting / body / clear ask / closing "
-                        + "where relevant), readability, conciseness, and completeness — did the response cover "
-                        + "EVERYTHING the situation required (e.g. a specific ETA, the cause, next steps, an apology "
-                        + "when warranted, the exact ask). HEAVILY penalize answers that omit key facts from the "
-                        + "situation, use the wrong tone, are vague, or are too short; a one-line or empty answer "
-                        + "scores near 0. HOUSE STYLE (this is a US-facing company, and it is marked): figures "
-                        + "must group digits in THREES with commas (e.g. $1,250,000). Treat Indian-style "
-                        + "grouping (12,50,000 / 1,23,456), the words lakh/lakhs/crore/crores, and any rupee "
-                        + "amount (Rs., INR, the rupee sign) as CONCRETE ERRORS: list each one in 'mistakes' with "
-                        + "the correct US form, and lower professionalism and clarity accordingly. CRITICAL: only "
-                        + "list a figure in 'mistakes' if it ACTUALLY breaks the rule — never emit a correction "
-                        + "identical to the original (e.g. never write \"1,250,000 should be 1,250,000\"). A figure "
-                        + "already grouped in threes and already in dollars is CORRECT: say nothing about it. Do not default "
-                        + "to round numbers. Return JSON with those numeric fields plus "
-                        + "'mistakes' (array of specific errors), 'suggestions' (array of concrete, specific "
-                        + "improvements), and 'improvedVersion' (a polished, ready-to-send MODEL answer that correctly "
-                        + "handles this exact situation, so the candidate learns how to write it).",
+                "You are an experienced business-writing COACH at a software company, marking "
+                        + "FIRST-YEAR employees who are still learning to write at work. They were given a "
+                        + "workplace SITUATION and a task — usually a customer email or an internal update — and "
+                        + "wrote a response. Your job is to give them an honest mark AND teach them how to do it "
+                        + "better next time.\n"
+
+                        + "PITCH THE BAR AT A COMPETENT FIRST-YEAR EMPLOYEE, NOT A SENIOR CONSULTANT. The "
+                        + "question is: would a colleague or a customer understand this, be able to act on it, and "
+                        + "find it professional? It does NOT have to be elegant, perfectly balanced, or the way you "
+                        + "would have written it. If a manager could send it after one or two small edits, that is "
+                        + "a good answer and must score in the 80s.\n"
+
+                        + "BANDS. 90-100 ready to send as it stands. 80-89 clear and professional, one or two "
+                        + "small fixes. 70-79 does the job and covers the task, several fixable issues. 55-69 "
+                        + "understandable but would need rewriting before anyone sent it. 35-54 confusing, or "
+                        + "missing something the situation required. Below 35 off-topic, one line, or unusable. "
+                        + "Use the whole range honestly — do not inflate a weak answer, and do not shave marks off "
+                        + "a decent one to look rigorous.\n"
+
+                        + "SCORE EACH FAULT ONCE, IN THE FIELD IT BELONGS TO. This is the most important "
+                        + "instruction here. The ten fields are averaged, so marking one clumsy sentence down "
+                        + "under grammar AND clarity AND tone AND professionalism AND readability punishes a "
+                        + "single fault five times and drags an average answer into the forties. A spelling "
+                        + "mistake is a spelling mistake: it is not also a professionalism failure. A missing "
+                        + "deadline is completeness, not tone. Only lower a field when THAT field is genuinely "
+                        + "weak on its own terms.\n"
+
+                        + "Score each field 0-100: grammar, spelling, clarity, vocabulary, tone (right for the "
+                        + "reader — warm and reassuring to a customer, brief and direct to a manager), "
+                        + "professionalism, structure (greeting, body, a clear ask, a closing, where those "
+                        + "apply), readability, conciseness, and completeness — did it cover what the situation "
+                        + "asked for, such as the cause, a specific date or time, what happens next, an apology "
+                        + "where one is warranted, and the exact request.\n"
+
+                        + "COMPLETENESS IS PROPORTIONAL. Deduct for each thing the task asked for and did not "
+                        + "get, in proportion to how much is missing — three of four points covered is a good "
+                        + "answer with a gap, not a failure. Reserve the bottom of the range for a response that "
+                        + "ignored the situation, or is so short it could not have covered it.\n"
+
+                        + "INDIAN ENGLISH USAGE. These candidates write Indian business English, which is correct "
+                        + "English — but this company writes to AMERICAN customers, and some usages read as odd, "
+                        + "old-fashioned or unclear to that reader. Treat them as things to LEARN, not as bad "
+                        + "writing: name each one in 'mistakes' with the natural US equivalent, and let it weigh "
+                        + "only lightly on vocabulary or tone. Common ones: \"do the needful\" (say what you "
+                        + "actually want done), \"revert back\" (\"reply\" or \"get back to you\"), \"kindly\" "
+                        + "(\"please\"), \"prepone\" (\"move up\" / \"bring forward\"), \"please intimate\" "
+                        + "(\"please let me know\"), \"the same\" used as a pronoun (\"it\" / \"them\"), \"updation\" "
+                        + "(\"update\"), \"discuss about\" (\"discuss\"), \"return back\" (\"return\"), \"out of "
+                        + "station\" (\"out of town\"), \"myself <name>\" (\"my name is\" / \"I am\"), and "
+                        + "\"good name\" (\"your name\"). Never call this wrong English, never mention accent, "
+                        + "and never tell them to sound American — explain only what the customer will find "
+                        + "clearer.\n"
+
+                        + "HOUSE STYLE, and this one IS marked as a concrete error: this is a US-facing company, "
+                        + "so figures group digits in THREES with commas (e.g. $1,250,000). Indian grouping "
+                        + "(12,50,000 / 1,23,456), the words lakh/lakhs/crore/crores, and any rupee amount (Rs., "
+                        + "INR, the rupee sign) must each be listed in 'mistakes' with the correct US form, and "
+                        + "lower professionalism and clarity. CRITICAL: only list a figure if it ACTUALLY breaks "
+                        + "the rule — never emit a correction identical to the original (never write \"1,250,000 "
+                        + "should be 1,250,000\"). A figure already grouped in threes and already in dollars is "
+                        + "CORRECT: say nothing about it.\n"
+
+                        + "NOW TEACH. 'mistakes' lists concrete errors, each quoting what they wrote and giving "
+                        + "the correction. 'suggestions' gives 2-4 specific improvements they can act on — start "
+                        + "with ONE thing this answer genuinely did well, quoting it, then the rest as "
+                        + "you-wrote-X, write-Y-instead, because-Z. Speak to them as 'you', warmly and plainly, "
+                        + "and never restate the score. 'improvedVersion' is a polished, ready-to-send model "
+                        + "answer for THIS exact situation, close enough to what they wrote that they can see how "
+                        + "their own attempt becomes it.\n"
+
+                        + "Return JSON with the ten numeric fields plus 'mistakes', 'suggestions' and "
+                        + "'improvedVersion'.",
                 "Task type: " + category + "\nScenario & task: " + prompt + "\n\nCandidate's response:\n" + content);
         if (node == null) {
             return mock.scoreWriting(category, prompt, content);
