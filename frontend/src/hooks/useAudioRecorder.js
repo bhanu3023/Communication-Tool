@@ -172,6 +172,10 @@ export function micProblemMessage(code) {
     case 'decode-failed':
       return 'Your voice was captured but this browser could not process the recording. '
         + 'Please record this sentence again, and use Chrome or Edge if it keeps happening.';
+    case 'silent-recording':
+      return 'Your microphone was connected but sent no sound, so the recording came out empty. '
+        + 'Check that the right microphone is selected and not muted — in Windows, Settings → '
+        + 'System → Sound → Input — then record this sentence again.';
     case 'no-recorder':
       return 'The recording had already stopped. Please record this sentence again.';
     default:
@@ -229,6 +233,7 @@ export function useAudioRecorder() {
   const recorderRef = useRef(null);
   const chunksRef = useRef([]);
   const mimeRef = useRef('');
+  const trackRef = useRef(null);
 
   const cleanup = useCallback(() => {
     if (streamRef.current) {
@@ -251,6 +256,10 @@ export function useAudioRecorder() {
     try {
       const stream = await navigator.mediaDevices.getUserMedia(AUDIO_CONSTRAINTS);
       streamRef.current = stream;
+      // A track that is `muted` is connected but delivering silence -- the device is being held
+      // by something else, or the OS is routing from a different input. That produces a
+      // container with no audio frames, which decodes to zero samples, which is a 0:00 take.
+      trackRef.current = stream.getAudioTracks()[0] || null;
       // Pick a container the browser actually supports (Chrome/Edge: webm/opus,
       // Safari: mp4). We transcode to WAV on stop, so the container doesn't matter.
       const candidates = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg'];
@@ -330,7 +339,35 @@ export function useAudioRecorder() {
         throw new Error('decodeAudioData returned no buffer');
       }
       const channel = audioBuf.getChannelData(0); // mono (first channel)
-      const wav = encodeWav(downsample(channel, audioBuf.sampleRate, 16000), 16000);
+      const samples = downsample(channel, audioBuf.sampleRate, 16000);
+      // A decode can SUCCEED and still yield no audio: the recorded container held only its
+      // header, because the microphone track delivered silence or ended before any frames were
+      // written. encodeWav then produced a valid 44-byte header with an empty data chunk -- which
+      // is why the player appeared and read 0:00 / 0:00 rather than failing outright.
+      //
+      // Shipping that was worse than shipping nothing. It is not empty to the backend (44 != 0),
+      // so it skipped the "no audio" branch, was posted to the transcriber, came back 400 as an
+      // invalid file, and the candidate scored ZERO on a sentence they had actually read aloud.
+      // Treat it as the failure it is: say so, and let them record again.
+      if (samples.length === 0 || audioBuf.duration === 0) {
+        const track = trackRef.current;
+        console.warn('[recorder] decoded to a silent/empty buffer', {
+          blobSize: blob.size,
+          mime: blob.type || mimeRef.current,
+          chunks: chunkCount,
+          decodedDuration: audioBuf.duration,
+          decodedSamples: audioBuf.length,
+          sampleRate: audioBuf.sampleRate,
+          channels: audioBuf.numberOfChannels,
+          trackMuted: track?.muted,
+          trackEnabled: track?.enabled,
+          trackState: track?.readyState,
+          trackLabel: track?.label,
+        });
+        setError('silent-recording');
+        return null;
+      }
+      const wav = encodeWav(samples, 16000);
       return await blobToBase64(wav);
     } catch (e) {
       // Everything above is local computation, so a failure here is a browser capability

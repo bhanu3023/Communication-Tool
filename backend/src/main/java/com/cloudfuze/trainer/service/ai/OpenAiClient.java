@@ -126,11 +126,20 @@ public class OpenAiClient {
      *
      * @param wav raw WAV bytes (16 kHz mono as produced by the recorder)
      */
+    /** Size of a canonical PCM WAV header — a file this small has an empty data chunk. */
+    private static final int WAV_HEADER_BYTES = 44;
+
     public Transcription transcribe(byte[] wav) {
         if (!isEnabled() || !StringUtils.hasText(transcribeModel)) {
             return Transcription.unavailable();
         }
-        if (wav == null || wav.length == 0) {
+        // A WAV header is 44 bytes, so anything at or below that carries no audio at all.
+        // "== 0" was not enough: a browser that decoded a candidate's recording to zero samples
+        // still produced a valid, EMPTY 44-byte file, which sailed past this check, was posted,
+        // and came back 400 "Invalid file format" -- one wasted call per sentence, and a
+        // candidate scored zero on a sentence they had read aloud. Anything this small is
+        // silence by definition; recognise it here rather than paying to be told.
+        if (wav == null || wav.length <= WAV_HEADER_BYTES) {
             // Nothing was submitted for this sentence. That is the candidate's recording, not an
             // outage, so it must not earn the benefit of the client-transcript fallback.
             return Transcription.unusableAudio();

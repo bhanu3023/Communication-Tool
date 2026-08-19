@@ -175,12 +175,18 @@ export default function Speaking() {
     await stopMic();
     setIsRecording(false);
     const audio = recorder.supported ? await recorder.stop() : null;
-    if (id != null) {
+    if (id != null && audio) {
       resultsRef.current[id] = {
         transcript: transcriptRef.current || '',
-        audio: audio || null,
+        audio,
       };
       setRecordCounts((prev) => ({ ...prev, [id]: (prev[id] || 0) + 1 }));
+    } else if (id != null) {
+      // The take produced nothing usable. Do NOT count it against the two chances: the
+      // candidate read the sentence aloud and the browser lost it, and burning a re-record for
+      // that meant two failed takes cost them the sentence outright, scored zero, with no way
+      // back. They are told why (the panel below shows recorder.error) and can simply try again.
+      showToast(micProblemMessage(recorder.error), 'error');
     }
     // Offer it straight back for playback. Null means the browser gave us nothing usable, and the
     // panel says so — better they find that out here than after the section is scored.
