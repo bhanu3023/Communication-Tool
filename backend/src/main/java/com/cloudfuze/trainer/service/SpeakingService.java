@@ -5,6 +5,7 @@ import com.cloudfuze.trainer.domain.SessionStatus;
 import com.cloudfuze.trainer.dto.SectionScoreResponse;
 import com.cloudfuze.trainer.dto.speaking.SpeakingDtos;
 import com.cloudfuze.trainer.entity.AssessmentSession;
+import com.cloudfuze.trainer.entity.SpeakingRecording;
 import com.cloudfuze.trainer.entity.SpeakingSentence;
 import com.cloudfuze.trainer.entity.User;
 import com.cloudfuze.trainer.repository.SpeakingSentenceRepository;
@@ -32,6 +33,8 @@ public class SpeakingService {
     // Ten minutes would have turned a content change into a time trial.
     private static final int OVERALL_SECONDS = 900;   // 15 minutes total
     private static final int QUESTION_SECONDS = 60;   // advisory only; the UI runs no per-sentence timer
+    /** A bare WAV header is 44 bytes, so anything this small carries no audio at all. */
+    private static final int EMPTY_AUDIO_BYTES = 44;
 
     private final SpeakingSetService speakingSetService;
     private final SessionService sessionService;
@@ -58,63 +61,69 @@ public class SpeakingService {
         this.sentenceRepository = sentenceRepository;
     }
 
-    /** Scores one spoken sentence: transcribe the recording, then grade that transcript. */
-    private SpeakingDtos.SpeechItem scoreSentence(SpeakingDtos.SpeechResultInput input) {
-        // Never trust the client's "expected" text — resolve the reference sentence from
-        // the database by id, so a caller can't send expected == transcript for a perfect
-        // score. The transcript is still client-supplied, but it is what gets graded.
+    /**
+     * Scores one spoken sentence against what its recording was heard to say.
+     *
+     * <p>The take was already uploaded and transcribed mid-test, so the text used here is the
+     * SAME text the candidate was shown before they moved on. Re-transcribing at submit time
+     * would pay for the same audio twice and could return slightly different words for one
+     * recording, so a candidate could be graded on something they never saw.
+     *
+     * <p>The client no longer supplies any transcript. It used to send the browser's live
+     * recognition, which is Chrome-only, drops the opening words, and is whatever the caller
+     * chose to put in the field — a forged one plus unusable audio was a route to full marks
+     * without speaking. The recording is the only evidence now.
+     *
+     * @param index zero-based position of this sentence, which is how the stored take is found
+     */
+    private SpeakingDtos.SpeechItem scoreSentence(Long sessionId, int index,
+                                                  SpeakingDtos.SpeechResultInput input) {
+        // Never trust the client's "expected" text — resolve the reference sentence from the
+        // database by id, so a caller cannot send expected == transcript for a perfect score.
         String expected = sentenceRepository.findById(input.sentenceId())
                 .map(SpeakingSentence::getText)
                 .orElse("");
-        String transcript = input.transcript() == null ? "" : input.transcript();
 
-        byte[] audio = decodeAudio(input.audioBase64());
-        // Transcribe the recording server-side. This is the ONLY text that may be shown back to
-        // anyone: the client transcript comes from the browser's Web Speech API, which drops the
-        // opening words while the mic is still coming up, is Chrome-only, and can be set to
-        // anything by whoever calls the endpoint. It exists so the candidate sees something
-        // while they speak, and for nothing else.
-        Transcription heard = aiService.transcribe(audio);
-        if (heard.assessed()) {
-            // The recording was checked. Whatever it was heard to say IS the answer — including
-            // nothing at all. Falling back here would score the client's transcript, which the
-            // caller controls, so unusable audio plus a perfect transcript would be full marks
-            // without speaking.
-            transcript = heard.text();
-        }
-        // Only a failure on our side — no key, rate limit, timeout, a 5xx — may fall back to the
-        // transcript the browser sent, so an outage cannot zero a candidate for something
-        // outside their control. Feedback shows "could not be processed" rather than that text.
-        boolean transcriptionFailed = heard.status() == Transcription.Status.UNAVAILABLE;
-        SpeakingEvaluation eval = aiService.scoreSpeaking(expected, transcript);
-        // Never hand back the browser's text. Empty + transcriptionFailed reads as "we could not
-        // process your recording"; empty on its own still reads as "no speech detected".
-        String shown = transcriptionFailed ? "" : transcript;
-        return new SpeakingDtos.SpeechItem(expected, shown, eval, false, transcriptionFailed);
-    }
-
-    /** Persists (or replaces) one sentence's recorded audio; returns true if audio was stored. */
-    private boolean storeRecording(Long sessionId, int index, String audioBase64) {
-        byte[] audio = decodeAudio(audioBase64);
-        if (audio == null || audio.length == 0) {
-            return false;
-        }
-        com.cloudfuze.trainer.entity.SpeakingRecording rec = recordingRepository
+        SpeakingRecording stored = recordingRepository
                 .findBySessionIdAndSentenceIndex(sessionId, index)
-                .orElseGet(com.cloudfuze.trainer.entity.SpeakingRecording::new);
-        rec.setSessionId(sessionId);
-        rec.setSentenceIndex(index);
-        rec.setAudio(audio);
-        recordingRepository.save(rec);
-        return true;
+                .orElse(null);
+        if (stored == null || stored.getAudio() == null || stored.getAudio().length <= EMPTY_AUDIO_BYTES) {
+            // No usable recording reached us for this sentence. That is an unanswered question,
+            // not an outage: score it as nothing said.
+            SpeakingEvaluation none = aiService.scoreSpeaking(expected, "");
+            return new SpeakingDtos.SpeechItem(expected, "", none, false, false);
+        }
+
+        String transcript = stored.getTranscript();
+        boolean transcriptionFailed = false;
+        if (transcript == null) {
+            // The take was stored but never transcribed — its upload landed while transcription
+            // was down. Try once more here rather than scoring a recording nobody has listened to.
+            Transcription heard = aiService.transcribe(stored.getAudio(), stored.getMimeType());
+            if (heard.assessed()) {
+                transcript = heard.text();
+                stored.setTranscript(transcript);
+                recordingRepository.save(stored);
+            } else {
+                // Still down. This is our failure, not theirs, so it must read as "could not be
+                // processed" rather than as silence — and it must not quietly score them zero.
+                transcript = "";
+                transcriptionFailed = true;
+            }
+        }
+
+        SpeakingEvaluation eval = aiService.scoreSpeaking(expected, transcript);
+        String shown = transcriptionFailed ? "" : transcript;
+        return new SpeakingDtos.SpeechItem(expected, shown, eval, true, transcriptionFailed);
     }
+
 
     /**
      * Returns the stored WAV bytes for one sentence of an attempt. Access is limited to
      * the session's owner or any manager.
      */
     @Transactional(readOnly = true)
-    public byte[] recording(User user, Long sessionId, int index) {
+    public SpeakingRecording recording(User user, Long sessionId, int index) {
         AssessmentSession session = sessionRepository.findById(sessionId)
                 .orElseThrow(() -> new com.cloudfuze.trainer.exception.ResourceNotFoundException(
                         "Session not found: " + sessionId));
@@ -125,9 +134,55 @@ public class SpeakingService {
                     org.springframework.http.HttpStatus.FORBIDDEN, "You cannot access this recording");
         }
         return recordingRepository.findBySessionIdAndSentenceIndex(sessionId, index)
-                .map(com.cloudfuze.trainer.entity.SpeakingRecording::getAudio)
                 .orElseThrow(() -> new com.cloudfuze.trainer.exception.ResourceNotFoundException(
                         "No recording for this sentence"));
+    }
+
+    /**
+     * Stores one take and transcribes it immediately, mid-test.
+     *
+     * <p>This is what the candidate is shown after they press stop: the words the TRANSCRIBER
+     * heard in their own recording, while they can still re-record. It replaces the browser's
+     * live speech recognition, which reported something different from what was actually scored
+     * — it drops the opening words while the microphone is still coming up, exists only on
+     * Chrome, and is whatever the caller chose to send. Showing the candidate one text and
+     * grading another was indefensible; now there is a single text and it is the graded one.
+     *
+     * <p>The transcript is kept on the recording row so scoring reuses it. Transcribing the same
+     * audio twice would double the cost per attempt and could return two different texts for one
+     * recording, which is the confusion this change exists to remove.
+     *
+     * <p>A take that cannot be transcribed is still stored. The audio is the evidence, and an
+     * outage on our side must not cost the candidate their answer.
+     */
+    @Transactional
+    public SpeakingDtos.TakeResponse recordTake(User user, SpeakingDtos.TakeRequest request) {
+        AssessmentSession session = sessionService.requireOwnedActiveSession(user, request.sessionId());
+        byte[] audio = decodeAudio(request.audioBase64());
+        if (audio == null || audio.length <= EMPTY_AUDIO_BYTES) {
+            // Nothing usable arrived. Say so plainly rather than storing an empty file that
+            // would later be graded as silence.
+            return new SpeakingDtos.TakeResponse("", false, false);
+        }
+
+        SpeakingRecording rec = recordingRepository
+                .findBySessionIdAndSentenceIndex(session.getId(), request.sentenceIndex())
+                .orElseGet(com.cloudfuze.trainer.entity.SpeakingRecording::new);
+        rec.setSessionId(session.getId());
+        rec.setSentenceIndex(request.sentenceIndex());
+        rec.setAudio(audio);
+        rec.setMimeType(request.mimeType());
+
+        Transcription heard = aiService.transcribe(audio, request.mimeType());
+        // Null (never transcribed) and "" (transcribed, nothing said) mean different things at
+        // scoring time, so only write the text when the recording was actually assessed.
+        rec.setTranscript(heard.assessed() ? heard.text() : null);
+        recordingRepository.save(rec);
+
+        auditService.log(user.getEmail(), "SPEAKING_TAKE",
+                "session=" + session.getId() + " index=" + request.sentenceIndex()
+                        + " bytes=" + audio.length + " assessed=" + heard.assessed());
+        return new SpeakingDtos.TakeResponse(heard.text(), heard.assessed(), true);
     }
 
     @Transactional
@@ -154,11 +209,12 @@ public class SpeakingService {
         List<SpeakingDtos.SpeechItem> items = new ArrayList<>();
         int index = 0;
         for (SpeakingDtos.SpeechResultInput input : request.results()) {
-            SpeakingDtos.SpeechItem scored = scoreSentence(input);
-            boolean hasAudio = storeRecording(session.getId(), index, input.audioBase64());
-            items.add(new SpeakingDtos.SpeechItem(
-                    scored.expected(), scored.transcript(), scored.evaluation(), hasAudio,
-                    scored.transcriptionFailed()));
+            // Each take was uploaded and transcribed the moment the candidate stopped recording,
+            // so there is nothing to store here and nothing to transcribe -- this reads what is
+            // already on disk. It also means a submit no longer carries several megabytes of
+            // audio, which is what used to make it the slowest, most failure-prone request in
+            // the app.
+            items.add(scoreSentence(session.getId(), index, input));
             index++;
         }
         double total = items.stream().mapToDouble(it -> it.evaluation().overall()).sum();

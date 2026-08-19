@@ -1,55 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-// --- WAV helpers: downsample to 16 kHz mono and encode 16-bit PCM ---
-function downsample(buffer, inRate, outRate) {
-  if (outRate >= inRate) return buffer;
-  const ratio = inRate / outRate;
-  const newLen = Math.round(buffer.length / ratio);
-  const result = new Float32Array(newLen);
-  let offsetResult = 0;
-  let offsetBuffer = 0;
-  while (offsetResult < newLen) {
-    const nextOffset = Math.round((offsetResult + 1) * ratio);
-    let accum = 0;
-    let count = 0;
-    for (let i = offsetBuffer; i < nextOffset && i < buffer.length; i += 1) {
-      accum += buffer[i];
-      count += 1;
-    }
-    result[offsetResult] = count ? accum / count : 0;
-    offsetResult += 1;
-    offsetBuffer = nextOffset;
-  }
-  return result;
-}
-
-function encodeWav(samples, sampleRate) {
-  const buffer = new ArrayBuffer(44 + samples.length * 2);
-  const view = new DataView(buffer);
-  const writeStr = (o, s) => {
-    for (let i = 0; i < s.length; i += 1) view.setUint8(o + i, s.charCodeAt(i));
-  };
-  writeStr(0, 'RIFF');
-  view.setUint32(4, 36 + samples.length * 2, true);
-  writeStr(8, 'WAVE');
-  writeStr(12, 'fmt ');
-  view.setUint32(16, 16, true);
-  view.setUint16(20, 1, true); // PCM
-  view.setUint16(22, 1, true); // mono
-  view.setUint32(24, sampleRate, true);
-  view.setUint32(28, sampleRate * 2, true);
-  view.setUint16(32, 2, true);
-  view.setUint16(34, 16, true);
-  writeStr(36, 'data');
-  view.setUint32(40, samples.length * 2, true);
-  let offset = 44;
-  for (let i = 0; i < samples.length; i += 1) {
-    const s = Math.max(-1, Math.min(1, samples[i]));
-    view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7fff, true);
-    offset += 2;
-  }
-  return new Blob([view], { type: 'audio/wav' });
-}
 
 function blobToBase64(blob) {
   return new Promise((resolve) => {
@@ -294,10 +244,17 @@ export function useAudioRecorder() {
     }
   }, [supported, reason, cleanup]);
 
-  // Returns base64 WAV (data URL) or null. On null, `error` says why and a diagnostic line is
-  // written to the console: this step is entirely client-side -- no server, no network -- so when
-  // a recording goes missing in one environment and not another, that console line is the only
-  // evidence of which stage failed.
+  // Returns { base64, mime, duration } for the take, or null when nothing usable was captured.
+  //
+  // The recording is handed back in the container the browser produced -- it is NOT converted to
+  // WAV here any more. That conversion ran the bytes through an AudioContext, and on some
+  // machines the decode returned zero samples, so a candidate who had read the sentence aloud
+  // had their answer replaced by an empty 44-byte file. The transcriber accepts webm, mp4 and
+  // ogg directly, so there is no reason to decode anything in the browser at all.
+  //
+  // The decode still happens, but ONLY to measure the take and catch genuine silence, and it can
+  // no longer destroy a recording: if it fails, the raw audio is uploaded regardless and the
+  // server decides what it hears.
   const stop = useCallback(async () => {
     setRecording(false);
     const recorder = recorderRef.current;
@@ -316,76 +273,71 @@ export function useAudioRecorder() {
         resolve(new Blob(chunksRef.current, { type: mimeRef.current || 'audio/webm' }));
       }
     });
+    const track = trackRef.current;
     cleanup();
     const chunkCount = chunksRef.current.length;
     chunksRef.current = [];
+    const mime = blob?.type || mimeRef.current || 'audio/webm';
+
     if (!blob || blob.size === 0) {
-      // The encoder handed back nothing at all: a muted or silent input device, or a
+      // The encoder handed back nothing at all: a muted or wrong input device, or a
       // MediaRecorder that never emitted a chunk.
-      console.warn('[recorder] empty recording', { chunks: chunkCount, mime: mimeRef.current });
+      console.warn('[recorder] empty recording', {
+        chunks: chunkCount,
+        mime,
+        trackMuted: track?.muted,
+        trackEnabled: track?.enabled,
+        trackState: track?.readyState,
+        trackLabel: track?.label,
+      });
       setError('empty-recording');
       return null;
     }
 
-    // Decode the recorded audio to PCM, then downsample to 16 kHz mono WAV.
+    // Measure the take. Advisory only -- see above.
+    let duration = null;
     let ctx = null;
     try {
-      const arrayBuf = await blob.arrayBuffer();
+      const arrayBuf = await blob.slice(0).arrayBuffer();
       const AudioCtx = window.AudioContext || window.webkitAudioContext;
-      if (!AudioCtx) throw new Error('no AudioContext');
-      ctx = new AudioCtx();
-      const audioBuf = await decodeToPcm(ctx, arrayBuf);
-      if (!audioBuf || typeof audioBuf.getChannelData !== 'function') {
-        throw new Error('decodeAudioData returned no buffer');
+      if (AudioCtx) {
+        ctx = new AudioCtx();
+        const audioBuf = await decodeToPcm(ctx, arrayBuf);
+        if (audioBuf && typeof audioBuf.getChannelData === 'function') {
+          duration = audioBuf.duration;
+          if (audioBuf.length === 0 || audioBuf.duration === 0) {
+            console.warn('[recorder] the microphone delivered no audio', {
+              blobSize: blob.size,
+              mime,
+              chunks: chunkCount,
+              decodedSamples: audioBuf.length,
+              sampleRate: audioBuf.sampleRate,
+              trackMuted: track?.muted,
+              trackEnabled: track?.enabled,
+              trackState: track?.readyState,
+              trackLabel: track?.label,
+            });
+            setError('silent-recording');
+            return null;
+          }
+        }
       }
-      const channel = audioBuf.getChannelData(0); // mono (first channel)
-      const samples = downsample(channel, audioBuf.sampleRate, 16000);
-      // A decode can SUCCEED and still yield no audio: the recorded container held only its
-      // header, because the microphone track delivered silence or ended before any frames were
-      // written. encodeWav then produced a valid 44-byte header with an empty data chunk -- which
-      // is why the player appeared and read 0:00 / 0:00 rather than failing outright.
-      //
-      // Shipping that was worse than shipping nothing. It is not empty to the backend (44 != 0),
-      // so it skipped the "no audio" branch, was posted to the transcriber, came back 400 as an
-      // invalid file, and the candidate scored ZERO on a sentence they had actually read aloud.
-      // Treat it as the failure it is: say so, and let them record again.
-      if (samples.length === 0 || audioBuf.duration === 0) {
-        const track = trackRef.current;
-        console.warn('[recorder] decoded to a silent/empty buffer', {
-          blobSize: blob.size,
-          mime: blob.type || mimeRef.current,
-          chunks: chunkCount,
-          decodedDuration: audioBuf.duration,
-          decodedSamples: audioBuf.length,
-          sampleRate: audioBuf.sampleRate,
-          channels: audioBuf.numberOfChannels,
-          trackMuted: track?.muted,
-          trackEnabled: track?.enabled,
-          trackState: track?.readyState,
-          trackLabel: track?.label,
-        });
-        setError('silent-recording');
-        return null;
-      }
-      const wav = encodeWav(samples, 16000);
-      return await blobToBase64(wav);
     } catch (e) {
-      // Everything above is local computation, so a failure here is a browser capability
-      // problem -- not the network, the server or the microphone permission.
-      console.warn('[recorder] could not convert the take to WAV', {
+      // The browser could not decode its own recording. That used to lose the take; now it only
+      // means we cannot show a duration, and the audio is uploaded for the server to transcribe.
+      console.warn('[recorder] could not measure the take locally (uploading it anyway)', {
         blobSize: blob.size,
-        mime: blob.type || mimeRef.current,
+        mime,
         chunks: chunkCount,
         error: e?.name,
         message: e?.message,
       });
-      setError('decode-failed');
-      return null;
     } finally {
-      // Close on every path. The old code only closed on success, so a browser that failed to
-      // decode also leaked an AudioContext per take, and browsers cap how many may exist.
       if (ctx) ctx.close().catch(() => {});
     }
+
+    setError(null);
+    return { base64: await blobToBase64(blob), mime, duration };
   }, [cleanup]);
 
   useEffect(() => () => cleanup(), [cleanup]);

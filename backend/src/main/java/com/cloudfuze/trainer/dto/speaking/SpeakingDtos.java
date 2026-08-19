@@ -18,6 +18,30 @@ public final class SpeakingDtos {
     }
 
     /**
+     * One take, uploaded as soon as the candidate stops recording.
+     *
+     * @param sentenceIndex zero-based position within the attempt; a re-record replaces the take
+     *                      already stored at that position
+     * @param mimeType      the container the browser recorded, so the transcriber can pick a
+     *                      decoder — webm/opus on Chrome and Edge, mp4 on Safari
+     */
+    public record TakeRequest(@NotNull Long sessionId, int sentenceIndex,
+                              @NotNull String audioBase64, String mimeType) {
+    }
+
+    /**
+     * What the recording was heard to say, shown to the candidate before they move on.
+     *
+     * @param text     the transcriber's words; empty when nothing was said, or when it could
+     *                 not run
+     * @param assessed true when the recording was actually checked — so an empty {@code text}
+     *                 means silence rather than an outage
+     * @param stored   whether the audio was kept; false means nothing usable arrived
+     */
+    public record TakeResponse(String text, boolean assessed, boolean stored) {
+    }
+
+    /**
      * One spoken result from the client: the live transcript (Web Speech) and/or
      * the recorded WAV audio (base64) for Azure pronunciation assessment.
      */

@@ -274,7 +274,17 @@ public class AiService {
      * @param wav raw WAV bytes as stored for the sentence
      */
     public Transcription transcribe(byte[] wav) {
-        return openAi.transcribe(wav);
+        return openAi.transcribe(wav, null);
+    }
+
+    /**
+     * Transcribes a recording in the container the browser produced.
+     *
+     * @param audio    raw recorded bytes, exactly as the browser wrote them
+     * @param mimeType the browser's container type, e.g. {@code audio/webm;codecs=opus}
+     */
+    public Transcription transcribe(byte[] audio, String mimeType) {
+        return openAi.transcribe(audio, mimeType);
     }
 
     /**

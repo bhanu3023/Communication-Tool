@@ -33,29 +33,35 @@ import LockedVideo from '../../components/LockedVideo';
 import ExamWarningDialog from '../../components/ExamWarningDialog';
 import ScoringScreen from '../../components/ScoringScreen';
 import { useCountdown } from '../../hooks/useCountdown';
-import { useSpeechRecognition } from '../../hooks/useSpeechRecognition';
 import { useSpeechSynthesis } from '../../hooks/useSpeechSynthesis';
 import { useMicMeter } from '../../hooks/useMicMeter';
 import { micProblemMessage, useAudioRecorder } from '../../hooks/useAudioRecorder';
 import { useExamMode } from '../../hooks/useExamMode';
-import { recordViolation, startSpeaking, submitSpeaking } from '../../services/assessmentService';
+import {
+  recordViolation,
+  startSpeaking,
+  submitSpeaking,
+  uploadSpeakingTake,
+} from '../../services/assessmentService';
 import { useToast } from '../../contexts/ToastContext';
 import { levelRules } from '../../utils/levels';
 
-// Candidates hear their own recording rather than reading a transcript of it.
+// There is ONE text in this section, and it is the one being scored: after each take the
+// recording is uploaded and transcribed on the server, and those words are shown straight back.
 //
-// The transcript used to be shown live while they spoke and again in the feedback, and it
-// confused people: it comes from the browser's speech recognition, which drops the opening words
-// while the mic is still coming up and is not what the score is based on. Two different texts on
-// screen — what they read out and what a recognizer thought it heard — invited them to argue with
-// the wrong one. The recording is the thing being evaluated, so the recording is what they get.
+// It replaced two worse designs. The browser's live speech recognition showed a running text
+// that was NOT what got graded — Chrome-only, missing the opening words — so a candidate could
+// argue with a text that never counted. Playback replaced it, but a recording cannot tell you
+// whether a word was misheard, and the player read 0:00 because a webm clip carries no duration
+// metadata, which read as a broken test. Showing the graded words solves both: if a word came
+// out wrong, they can see it and re-record while it still costs them nothing.
 
 const INTRO_STEPS = [
   { icon: HeadphonesIcon, title: 'Wear earphones', desc: 'Put on your earphones for the clearest recording.' },
   { icon: MenuBookIcon, title: 'Read the sentence aloud', desc: 'A business-migration sentence appears — read it clearly and naturally.' },
   { icon: MicIcon, title: 'Press Record', desc: 'The microphone starts only when you press “Record answer”.' },
   { icon: HourglassTopIcon, title: 'Wait one second', desc: 'The mic takes a moment to start. Wait until it says “Listening…”, then begin — speaking too early cuts off your first word.' },
-  { icon: ReplayIcon, title: 'Play it back', desc: 'Press Stop, then listen to your recording. Not happy with it? Re-record once — the latest take is scored.' },
+  { icon: ReplayIcon, title: 'Check what was heard', desc: 'Press Stop and your recording is checked straight away — the words it was heard to say appear on screen. Not right? Re-record once; the latest take is scored.' },
   { icon: ArrowForwardIcon, title: 'No sentence timer', desc: 'Take the time you need, then press “Next”. 10 sentences in total.' },
   { icon: InsightsIcon, title: 'AI feedback', desc: 'You get pronunciation, fluency and accuracy scores with tips to improve.' },
 ];
@@ -74,17 +80,11 @@ export default function Speaking() {
   const homePath = level === 2 ? '/level-2' : '/dashboard';
   const hubPath = level === 2 ? '/level-2' : '/assessment';
   const { showToast } = useToast();
-  // The recognizer still runs, but nothing it hears is shown any more. It is kept purely as a
-  // safety net: if server-side transcription is down when the section is submitted, the backend
-  // scores this text instead of zeroing the candidate for an outage on our side.
-  const {
-    supported,
-    transcriptRef,
-    error: speechError,
-    start: startMic,
-    stop: stopMic,
-    setTranscript,
-  } = useSpeechRecognition();
+  // The browser's live speech recognition is GONE. It produced a second, different text from
+  // the one being graded -- Chrome-only, missing the opening words, and trivially forged -- and
+  // showing a candidate one text while scoring another could not be defended. Every take is now
+  // transcribed server-side from the recording itself, and that single text is both what they
+  // are shown and what is scored.
   const tts = useSpeechSynthesis();
   const mic = useMicMeter();
   const recorder = useAudioRecorder();
@@ -94,19 +94,25 @@ export default function Speaking() {
   const [index, setIndex] = useState(0);
   const [videoEnded, setVideoEnded] = useState(false);
   const [result, setResult] = useState(null);
-  const resultsRef = useRef({}); // sentenceId -> { transcript, audio }
+  const resultsRef = useRef({}); // sentenceId -> { heard }
   const recordingIdRef = useRef(null);
-  // transcriptRef comes from the hook and is updated inside onresult. It used to be assigned
-  // during render from the `transcript` state, which meant a candidate who pressed Next
-  // straight after their last word saved a transcript missing that word.
   const submittingRef = useRef(false);
   const [submitting, setSubmitting] = useState(false);
   // How many times each sentence has been recorded: 0, 1, or 2 (1 original + 1 re-record).
   const [recordCounts, setRecordCounts] = useState({});
   const [isRecording, setIsRecording] = useState(false);
-  // The take just finished, as a playable WAV data URL, so the candidate can hear what was
-  // captured before they move on. Cleared whenever they start a new take or change sentence.
-  const [takeAudio, setTakeAudio] = useState(null);
+  // Whether a take has been recorded for the current sentence. This used to hold the take's
+  // base64 so an <audio> element could play it back, which meant several megabytes of string
+  // sitting in React state per sentence for a player that has now been removed.
+  const [hasTake, setHasTake] = useState(false);
+  // How long the take ran, when the browser could measure it. This is why the playback control
+  // was removed rather than fixed: a webm recording from MediaRecorder carries no duration
+  // metadata, so the player read 0:00 for a good clip. The length is measured from the decoded
+  // audio instead, and shown as text.
+  const [takeDuration, setTakeDuration] = useState(null);
+  // What the transcriber heard in the recording just uploaded. Null before any take,
+  // { pending } while it is being transcribed, then { text, assessed } or { failed }.
+  const [heard, setHeard] = useState(null);
   // Mic and recognizer are coming up but are not capturing yet — the candidate must not speak.
   const [preparing, setPreparing] = useState(false);
   const MAX_RECORDINGS = 2; // original attempt + one re-record
@@ -129,8 +135,7 @@ export default function Speaking() {
       return;
     }
     recordingIdRef.current = current.id;
-    setTakeAudio(null); // a re-record replaces the previous take, so drop its playback too
-    setTranscript(''); // fresh fallback transcript for this take
+    setHasTake(false); // a re-record replaces the previous take
     setPreparing(true);
     try {
       // Capture must be PROVEN before the UI says a word about recording. This used to start the
@@ -155,51 +160,70 @@ export default function Speaking() {
         showToast(micProblemMessage(recorder.error), 'error');
         return;
       }
-      if (supported) {
-        await startMic();
-      }
       setIsRecording(true);
     } finally {
       setPreparing(false);
     }
   };
 
-  // Stop and persist the current take (a re-record overwrites the previous take).
+  // Stop the take, upload it, and show what the recording was actually heard to say.
+  //
+  // The upload happens HERE rather than at submit for two reasons. The candidate gets to see the
+  // transcriber's words while they can still re-record, instead of discovering after the section
+  // is scored that a sentence came out as silence. And the submit request no longer carries ten
+  // recordings at once, which was several megabytes in a single POST -- the slowest and most
+  // fragile request in the app.
   const finalizeRecording = useCallback(async () => {
     const id = recordingIdRef.current;
-    // Stop the recognizer FIRST. It used to be stopped after the audio was decoded and
-    // re-encoded, which left it listening for the whole of that work -- so anything said after
-    // pressing Next, including someone else talking, landed in this sentence's transcript.
-    // stop() also resolves only once the engine has delivered its final result, so awaiting it
-    // keeps the closing words.
-    await stopMic();
     setIsRecording(false);
-    const audio = recorder.supported ? await recorder.stop() : null;
-    if (id != null && audio) {
-      resultsRef.current[id] = {
-        transcript: transcriptRef.current || '',
-        audio,
-      };
-      setRecordCounts((prev) => ({ ...prev, [id]: (prev[id] || 0) + 1 }));
-    } else if (id != null) {
-      // The take produced nothing usable. Do NOT count it against the two chances: the
-      // candidate read the sentence aloud and the browser lost it, and burning a re-record for
-      // that meant two failed takes cost them the sentence outright, scored zero, with no way
-      // back. They are told why (the panel below shows recorder.error) and can simply try again.
-      showToast(micProblemMessage(recorder.error), 'error');
-    }
-    // Offer it straight back for playback. Null means the browser gave us nothing usable, and the
-    // panel says so — better they find that out here than after the section is scored.
-    setTakeAudio(audio || null);
+    const take = recorder.supported ? await recorder.stop() : null;
     recordingIdRef.current = null;
-  }, [recorder, stopMic, transcriptRef]);
+
+    if (!take) {
+      // Nothing usable was captured. Do NOT count it against the two chances: the candidate read
+      // the sentence aloud and the browser lost it, and burning a re-record for that meant two
+      // failed takes cost them the sentence outright, scored zero, with no way back.
+      setHasTake(false);
+      setHeard(null);
+      showToast(micProblemMessage(recorder.error || recorder.reason), 'error');
+      return;
+    }
+
+    // Play it back from the bytes we hold, not from the server: it is instant, and it is the
+    // same audio that was just uploaded.
+    setHasTake(true);
+    setTakeDuration(take.duration);
+    if (id != null) {
+      setRecordCounts((prev) => ({ ...prev, [id]: (prev[id] || 0) + 1 }));
+    }
+
+    setHeard({ pending: true });
+    try {
+      const res = await uploadSpeakingTake({
+        sessionId: data.sessionId,
+        sentenceIndex: index,
+        audioBase64: take.base64,
+        mimeType: take.mime,
+      });
+      // `assessed` false means transcription could not run on our side. That is not the
+      // candidate's fault and must not read as "you said nothing" -- their audio is stored and
+      // will be transcribed when the section is scored.
+      setHeard({ text: res.text || '', assessed: res.assessed, stored: res.stored });
+      if (id != null) {
+        resultsRef.current[id] = { heard: res.text || '' };
+      }
+    } catch {
+      // The take is still in the browser and the section can still be submitted; the server
+      // transcribes whatever it holds at scoring time.
+      setHeard({ failed: true });
+    }
+  }, [recorder, data, index, showToast]);
 
   // Too many fullscreen exits ends the exam.
   const endExam = useCallback(() => {
-    stopMic();
     showToast('Exam ended — you left fullscreen too many times.', 'error');
     navigate(homePath);
-  }, [navigate, showToast, stopMic]);
+  }, [navigate, showToast]);
   const { enter, leave, continueExam, warningOpen, warningCount, warningReason, maxWarnings } = useExamMode({
     active: phase === 'active',
     allowTyping: false, // speaking uses the mic, not the keyboard
@@ -219,17 +243,11 @@ export default function Speaking() {
       try {
         const payload = {
           sessionId: data.sessionId,
-          results: sentences.map((s) => {
-            const r = resultsRef.current[s.id] || {};
-            return {
-              sentenceId: s.id,
-              expected: s.text,
-              transcript: r.transcript || '',
-              // Always send the audio so it is stored server-side and can be replayed
-              // later from the dashboard / manager portal (not just this results screen).
-              audioBase64: r.audio || null,
-            };
-          }),
+          // Only the sentence ids travel now. Every take was uploaded and transcribed the
+          // moment it was recorded, so the server already holds the audio and the text it was
+          // heard to say -- and neither can be supplied by the client any more, which is what
+          // used to make a forged transcript plus junk audio a route to full marks.
+          results: sentences.map((s) => ({ sentenceId: s.id })),
         };
         const res = await submitSpeaking(payload);
         setResult(res);
@@ -268,26 +286,11 @@ export default function Speaking() {
     },
   });
 
-  // Only surface recognizer problems that also break the RECORDING, which is what is actually
-  // scored. A blocked or missing mic means there is nothing to record and the candidate must fix
-  // it; the rest — the recognizer's own network trouble, an engine that gave up — leaves the
-  // recording perfectly intact, and warning about it would send someone chasing a fault that
-  // does not affect their result.
+  // Each sentence starts with a clean slate. The mic is NOT auto-started — the candidate
+  // presses "Record" when they are ready.
   useEffect(() => {
-    if (speechError !== 'not-allowed' && speechError !== 'audio-capture') return;
-    const msg =
-      speechError === 'not-allowed'
-        ? 'Microphone permission is blocked. Allow it in the browser (🔒 icon → Microphone).'
-        : 'No microphone was captured — it may be muted or used by another app.';
-    showToast(msg, 'error');
-  }, [speechError, showToast]);
-
-  // Clear the transcript for each new sentence. The mic is NOT auto-started —
-  // the candidate presses "Record" when ready.
-  useEffect(() => {
-    setTranscript('');
-    setTakeAudio(null);
-    stopMic();
+    setHasTake(false);
+    setHeard(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [index]);
 
@@ -455,9 +458,9 @@ export default function Speaking() {
             The test runs in <strong>fullscreen</strong> — leaving fullscreen gives a warning (3 allowed)
             before the exam ends. Please put on your earphones before you begin.
           </Alert>
-          {!supported && (
+          {recorder.reason && (
             <Alert severity="warning" sx={{ mt: 2 }}>
-              Your browser does not support speech recognition. Please use Chrome or Edge.
+              {micProblemMessage(recorder.reason)}
             </Alert>
           )}
 
@@ -785,12 +788,52 @@ export default function Speaking() {
             <Typography variant="caption" color="text.secondary">
               Your recording
             </Typography>
-            {takeAudio ? (
+            {hasTake ? (
               <Box>
-                {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
-                <audio controls src={takeAudio} style={{ width: '100%', height: 40, marginTop: 8 }} />
-                <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
-                  Listen to what you said — this recording is what gets evaluated.
+                {/* No playback control here. It showed 0:00 for a perfectly good take -- a webm
+                    recording from MediaRecorder carries no duration metadata, so the browser's
+                    clock has nothing to read -- and once the transcribed words are shown below,
+                    hearing the clip back adds nothing but a broken-looking timer. The audio is
+                    still stored and can be replayed from the manager portal. */}
+                {takeDuration != null && (
+                  <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                    {takeDuration.toFixed(1)} seconds recorded
+                  </Typography>
+                )}
+
+                {/* What the transcriber heard. This is the ONLY text in the test now, and it is
+                    the text the score is based on -- so a candidate can see a misheard word and
+                    re-record while it still costs them nothing. */}
+                <Box sx={{ mt: 1.5, p: 1.5, borderRadius: 2, bgcolor: '#fff', border: '1px solid #e3e8ef' }}>
+                  <Typography variant="caption" color="text.secondary" display="block">
+                    What your recording was heard to say
+                  </Typography>
+                  {heard?.pending ? (
+                    <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 0.5 }}>
+                      <CircularProgress size={14} />
+                      <Typography variant="body2" color="text.secondary">
+                        Checking your recording…
+                      </Typography>
+                    </Stack>
+                  ) : heard?.failed || heard?.assessed === false ? (
+                    <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                      We could not check your recording just now. It has been saved and will still
+                      be scored — you do not need to record again.
+                    </Typography>
+                  ) : heard && heard.text ? (
+                    <Typography variant="body2" sx={{ mt: 0.5, fontWeight: 600 }}>
+                      “{heard.text}”
+                    </Typography>
+                  ) : heard ? (
+                    <Typography variant="body2" color="error" sx={{ mt: 0.5 }}>
+                      No words were heard in this recording. Please record it again — speak
+                      clearly and check your microphone is not muted.
+                    </Typography>
+                  ) : null}
+                </Box>
+
+                <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1 }}>
+                  This recording is what gets evaluated.
                   {recordCount < MAX_RECORDINGS
                     ? ' If it is not right, you can re-record once.'
                     : ' You have used your re-record for this sentence.'}
@@ -802,7 +845,7 @@ export default function Speaking() {
                   ? 'Getting the mic ready — please wait before speaking…'
                   : isRecording
                     ? 'Recording… read the sentence aloud, then press “Stop recording”.'
-                    : recordCount > 0
+                    : recordCount > 0 || recorder.error
                       ? micProblemMessage(recorder.error)
                       : 'Press “Record answer”, read the sentence aloud, then play it back here.'}
               </Typography>

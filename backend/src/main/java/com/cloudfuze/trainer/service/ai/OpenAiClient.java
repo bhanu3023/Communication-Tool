@@ -17,6 +17,7 @@ import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientResponseException;
 
 import java.time.Duration;
+import java.util.Locale;
 import java.util.List;
 import java.util.Map;
 
@@ -129,7 +130,29 @@ public class OpenAiClient {
     /** Size of a canonical PCM WAV header — a file this small has an empty data chunk. */
     private static final int WAV_HEADER_BYTES = 44;
 
-    public Transcription transcribe(byte[] wav) {
+    /**
+     * Maps a browser container type onto the filename extension the transcriber needs.
+     *
+     * <p>The API picks its decoder from the filename, so this cannot stay hardcoded to .wav now
+     * that the browser's own recording is sent through untouched: Chrome and Edge produce
+     * webm/opus and Safari produces mp4, and either one labelled .wav comes back 400.
+     */
+    static String filenameFor(String mimeType) {
+        String m = mimeType == null ? "" : mimeType.toLowerCase(Locale.ROOT);
+        if (m.contains("webm")) return "speech.webm";
+        if (m.contains("ogg")) return "speech.ogg";
+        // audio/mp4 and audio/x-m4a are both AAC in an MP4 container; .m4a is accepted.
+        if (m.contains("mp4") || m.contains("m4a") || m.contains("aac")) return "speech.m4a";
+        if (m.contains("mpeg") || m.contains("mp3")) return "speech.mp3";
+        // Rows written before the container was recorded were always WAV.
+        return "speech.wav";
+    }
+
+    public Transcription transcribe(byte[] audio) {
+        return transcribe(audio, null);
+    }
+
+    public Transcription transcribe(byte[] wav, String mimeType) {
         if (!isEnabled() || !StringUtils.hasText(transcribeModel)) {
             return Transcription.unavailable();
         }
@@ -147,11 +170,13 @@ public class OpenAiClient {
         try {
             MultiValueMap<String, Object> form = new LinkedMultiValueMap<>();
             form.add("model", transcribeModel);
-            // Whisper picks the decoder from the filename extension, so it must say .wav.
+            // The decoder is chosen from the filename extension, so it must match the container
+            // the browser actually recorded.
+            final String filename = filenameFor(mimeType);
             form.add("file", new ByteArrayResource(wav) {
                 @Override
                 public String getFilename() {
-                    return "speech.wav";
+                    return filename;
                 }
             });
             // The candidates speak Indian English; naming the language stops the model

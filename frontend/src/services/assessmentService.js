@@ -25,6 +25,11 @@ export const submitListening = (payload) => api.post('/listening/submit', payloa
 // --- Speaking ---
 export const startSpeaking = (level = 1) =>
   api.post('/speaking/start', null, { params: { level } }).then((r) => r.data);
+// Uploaded as soon as the candidate stops recording, so the take is transcribed while they can
+// still re-record. Returns what the recording was actually heard to say.
+export const uploadSpeakingTake = (payload) =>
+  api.post('/speaking/take', payload).then((r) => r.data);
+
 export const submitSpeaking = (payload) => api.post('/speaking/submitSpeech', payload).then((r) => r.data);
 export const getSpeakingRecording = (sessionId, index) =>
   api.get(`/speaking/recording/${sessionId}/${index}`, { responseType: 'blob' }).then((r) => r.data);

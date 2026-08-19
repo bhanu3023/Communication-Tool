@@ -39,7 +39,13 @@ public class SpeakingController {
         return speakingService.start(currentUser.user(), level);
     }
 
-    @Operation(summary = "Submit speech transcripts and receive the score")
+    @Operation(summary = "Upload one take and get back what the recording was heard to say")
+    @PostMapping("/take")
+    public SpeakingDtos.TakeResponse take(@Valid @RequestBody SpeakingDtos.TakeRequest request) {
+        return speakingService.recordTake(currentUser.user(), request);
+    }
+
+    @Operation(summary = "Score the takes already uploaded for this attempt")
     @PostMapping("/submitSpeech")
     public SectionScoreResponse submitSpeech(@Valid @RequestBody SpeakingDtos.SubmitRequest request) {
         return speakingService.submit(currentUser.user(), request);
@@ -48,10 +54,17 @@ public class SpeakingController {
     @Operation(summary = "Play back one sentence's recorded audio from an attempt")
     @GetMapping("/recording/{sessionId}/{index}")
     public ResponseEntity<byte[]> recording(@PathVariable Long sessionId, @PathVariable int index) {
-        byte[] wav = speakingService.recording(currentUser.user(), sessionId, index);
+        com.cloudfuze.trainer.entity.SpeakingRecording rec =
+                speakingService.recording(currentUser.user(), sessionId, index);
+        // Recordings are now stored in whatever container the browser produced, so the type has
+        // to come from the row. Rows written before that column existed were always WAV, and a
+        // webm clip served as audio/wav simply does not play in some browsers.
+        String type = org.springframework.util.StringUtils.hasText(rec.getMimeType())
+                ? rec.getMimeType()
+                : "audio/wav";
         return ResponseEntity.ok()
-                .contentType(MediaType.parseMediaType("audio/wav"))
+                .contentType(MediaType.parseMediaType(type))
                 .cacheControl(CacheControl.maxAge(1, TimeUnit.HOURS).cachePrivate())
-                .body(wav);
+                .body(rec.getAudio());
     }
 }
