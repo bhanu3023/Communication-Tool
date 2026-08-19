@@ -61,10 +61,16 @@ jobs:
           chmod 600 ~/.ssh/deploy_key
           ssh-keyscan -p "${{ secrets.DEPLOY_PORT }}" "${{ secrets.DEPLOY_HOST }}" >> ~/.ssh/known_hosts
 
-      - name: Copy release to server
+      - name: Copy release and deploy script to server
         run: |
+          # The deploy script is copied fresh every run instead of being executed from
+          # inside the deploy path — that path's checkout predates this workflow (and,
+          # more generally, the script shouldn't have to already exist there before the
+          # overlay that would place it runs).
           scp -i ~/.ssh/deploy_key -P "${{ secrets.DEPLOY_PORT }}" -o StrictHostKeyChecking=yes \
             release.tar "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:/tmp/release-${{ github.run_id }}.tar"
+          scp -i ~/.ssh/deploy_key -P "${{ secrets.DEPLOY_PORT }}" -o StrictHostKeyChecking=yes \
+            .github/deploy/deploy-remote.sh "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:/tmp/deploy-remote-${{ github.run_id }}.sh"
 
       - name: Run remote deploy (overlay, backup, build, swap, health-check, auto-rollback)
         id: run-deploy
@@ -72,10 +78,10 @@ jobs:
           set +e
           ssh -i ~/.ssh/deploy_key -p "${{ secrets.DEPLOY_PORT }}" -o StrictHostKeyChecking=yes \
             "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" \
-            "bash ${{ secrets.DEPLOY_PATH }}/.github/deploy/deploy-remote.sh \
+            "bash /tmp/deploy-remote-${{ github.run_id }}.sh \
               '${{ secrets.DEPLOY_PATH }}' \
               '/tmp/release-${{ github.run_id }}.tar' \
-              '${{ env.HEALTH_URL }}'" | tee deploy-output.log
+              '${{ env.HEALTH_URL }}'; rm -f /tmp/deploy-remote-${{ github.run_id }}.sh" 2>&1 | tee deploy-output.log
           SSH_EXIT=${PIPESTATUS[0]}
           RESULT=$(grep -o 'DEPLOY_RESULT=[a-z_:]*' deploy-output.log | tail -1 | cut -d= -f2)
           echo "result=${RESULT:-failed:unknown}" >> "$GITHUB_OUTPUT"
