@@ -25,6 +25,9 @@ jobs:
       - name: Validate docker-compose.yml
         run: docker compose config --quiet
 
+      - name: Validate docker-compose.prod.yml (the file the deploy actually uses)
+        run: docker compose -f docker-compose.prod.yml config --quiet
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin

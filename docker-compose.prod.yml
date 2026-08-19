@@ -1,0 +1,81 @@
+# Production compose file — used ONLY by .github/deploy/deploy-remote.sh on the server.
+# Deliberately separate from docker-compose.yml (the local-dev file, which exposes ports
+# directly for convenience) so a deploy never re-publishes the DB or the app containers
+# to the internet directly. Everything here is bound to 127.0.0.1 except the proxy, which
+# terminates TLS and is the only thing meant to be reachable from outside.
+#
+# nginx-proxy/certs/ is intentionally NOT part of this repo (git-ignored) — the TLS
+# key/cert live only on the server, the same way .env does.
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: trainer-db
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-trainer}
+      POSTGRES_USER: ${POSTGRES_USER:-trainer}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-trainer}
+    # No ports: — never published to the host. backend reaches it over the internal
+    # docker network via the service name "db".
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-trainer}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build: ./backend
+    container_name: trainer-backend
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/${POSTGRES_DB:-trainer}
+      POSTGRES_USER: ${POSTGRES_USER:-trainer}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-trainer}
+      AZURE_TENANT_ID: ${AZURE_TENANT_ID}
+      AZURE_CLIENT_ID: ${AZURE_CLIENT_ID}
+      APP_JWT_SECRET: ${APP_JWT_SECRET:-change-me-to-a-long-random-secret-value-at-least-32-chars}
+      APP_JWT_EXPIRATION_MINUTES: ${APP_JWT_EXPIRATION_MINUTES:-480}
+      APP_CORS_ORIGINS: ${APP_CORS_ORIGINS:-http://localhost:5173}
+      APP_DEV_LOGIN_ENABLED: ${APP_DEV_LOGIN_ENABLED:-false}
+      APP_SUPER_ADMIN_EMAILS: ${APP_SUPER_ADMIN_EMAILS:-abhinav.surattu@cloudfuze.com}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+      OPENAI_AUDIO_MODEL: ${OPENAI_AUDIO_MODEL-gpt-audio-mini}
+      OPENAI_TRANSCRIBE_MODEL: ${OPENAI_TRANSCRIBE_MODEL:-gpt-4o-transcribe}
+    ports:
+      - "127.0.0.1:6666:8080"
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8080/api}
+        VITE_AZURE_TENANT_ID: ${VITE_AZURE_TENANT_ID}
+        VITE_AZURE_CLIENT_ID: ${VITE_AZURE_CLIENT_ID}
+        VITE_AZURE_REDIRECT_URI: ${VITE_AZURE_REDIRECT_URI:-http://localhost:5173}
+        VITE_HOTJAR_SITE_ID: ${VITE_HOTJAR_SITE_ID:-}
+        VITE_DEV_LOGIN: ${VITE_DEV_LOGIN:-false}
+        VITE_SPEAKING_AUDIO: ${VITE_SPEAKING_AUDIO:-false}
+    container_name: trainer-frontend
+    depends_on:
+      - backend
+    ports:
+      - "127.0.0.1:5174:80"
+
+  proxy:
+    image: nginx:alpine
+    container_name: trainer-proxy
+    depends_on:
+      - backend
+      - frontend
+    volumes:
+      - ./nginx-proxy/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./nginx-proxy/certs:/etc/nginx/certs:ro
+    ports:
+      - "9443:443"
+
+volumes:
+  pgdata:

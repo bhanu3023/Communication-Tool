@@ -26,3 +26,6 @@ Thumbs.db
 
 # Filled-in production env (secrets) — never commit
 .env.production
+
+# TLS key/cert for the production nginx proxy — server-only, never commit
+nginx-proxy/certs/

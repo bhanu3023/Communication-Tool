@@ -19,6 +19,10 @@ BACKUP_DIR="$HOME/backups/comm-tool"
 MIN_BACKUP_BYTES=1024
 HEALTH_RETRIES=10
 HEALTH_DELAY_SECS=6
+# docker-compose.yml (no suffix) is the local-dev file — exposes ports directly for
+# convenience. Production always uses this file instead, which binds everything to
+# 127.0.0.1 except the TLS-terminating proxy.
+COMPOSE="docker compose -f docker-compose.prod.yml"
 
 fail() {
   echo "DEPLOY_RESULT=failed:$1"
@@ -29,7 +33,7 @@ rollback_images() {
   echo "== Rolling back to previous images =="
   docker tag "${BACKEND_IMG}:previous" "${BACKEND_IMG}:latest" 2>/dev/null || echo "  no ${BACKEND_IMG}:previous to restore"
   docker tag "${FRONTEND_IMG}:previous" "${FRONTEND_IMG}:latest" 2>/dev/null || echo "  no ${FRONTEND_IMG}:previous to restore"
-  if docker compose -f "$DEPLOY_PATH/docker-compose.yml" up -d --no-build; then
+  if $COMPOSE up -d --no-build --remove-orphans; then
     echo "  rollback complete — previous version restored and running"
   else
     echo "  ROLLBACK ITSELF FAILED — a human must intervene on the server directly, containers may be down"
@@ -67,13 +71,13 @@ docker tag "${BACKEND_IMG}:latest" "${BACKEND_IMG}:previous" 2>/dev/null || echo
 docker tag "${FRONTEND_IMG}:latest" "${FRONTEND_IMG}:previous" 2>/dev/null || echo "  no existing ${FRONTEND_IMG}:latest (first-ever deploy)"
 
 echo "== Building new images (running containers are NOT touched yet) =="
-if ! docker compose build; then
+if ! $COMPOSE build; then
   echo "Build failed. Nothing on the server has been touched — old containers are still running as before."
   fail "build"
 fi
 
 echo "== Swapping to the new version =="
-if ! docker compose up -d; then
+if ! $COMPOSE up -d --remove-orphans; then
   echo "Swap itself failed to start — rolling back immediately."
   rollback_images
   fail "build"
