@@ -797,7 +797,7 @@ export default function Speaking() {
                   : isRecording
                     ? 'Recording… read the sentence aloud, then press “Stop recording”.'
                     : recordCount > 0
-                      ? 'Your recording could not be played back. Please re-record this sentence.'
+                      ? micProblemMessage(recorder.error)
                       : 'Press “Record answer”, read the sentence aloud, then play it back here.'}
               </Typography>
             )}

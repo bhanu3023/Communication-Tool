@@ -166,9 +166,44 @@ export function micProblemMessage(code) {
     case 'in-use':
       return 'Your microphone is being used by another app (Teams, Zoom or Meet). '
         + 'Close it, then press Record again.';
+    case 'empty-recording':
+      return 'Nothing was captured — your microphone sent no sound. Check it is not muted or '
+        + 'set to the wrong device, then record this sentence again.';
+    case 'decode-failed':
+      return 'Your voice was captured but this browser could not process the recording. '
+        + 'Please record this sentence again, and use Chrome or Edge if it keeps happening.';
+    case 'no-recorder':
+      return 'The recording had already stopped. Please record this sentence again.';
     default:
       return 'The microphone could not be started. Please press Record again.';
   }
+}
+
+/**
+ * Decodes compressed audio to PCM, tolerating Safari's older API.
+ *
+ * <p>Safari before 14.1 implements ONLY the callback form of decodeAudioData and returns
+ * undefined from the promise form. `await ctx.decodeAudioData(buf)` therefore resolves to
+ * undefined and the very next line throws on `.getChannelData` — which the old catch swallowed,
+ * so the take vanished with no explanation. Calling the callback form and ALSO honouring a
+ * returned promise covers both.
+ */
+function decodeToPcm(ctx, arrayBuf) {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const ok = (buf) => { if (!settled) { settled = true; resolve(buf); } };
+    const bad = (e) => { if (!settled) { settled = true; reject(e || new Error('decodeAudioData failed')); } };
+    let maybePromise;
+    try {
+      maybePromise = ctx.decodeAudioData(arrayBuf, ok, bad);
+    } catch (e) {
+      bad(e);
+      return;
+    }
+    if (maybePromise && typeof maybePromise.then === 'function') {
+      maybePromise.then(ok, bad);
+    }
+  });
 }
 
 /**
@@ -250,12 +285,16 @@ export function useAudioRecorder() {
     }
   }, [supported, reason, cleanup]);
 
-  // Returns base64 WAV (data URL) or null.
+  // Returns base64 WAV (data URL) or null. On null, `error` says why and a diagnostic line is
+  // written to the console: this step is entirely client-side -- no server, no network -- so when
+  // a recording goes missing in one environment and not another, that console line is the only
+  // evidence of which stage failed.
   const stop = useCallback(async () => {
     setRecording(false);
     const recorder = recorderRef.current;
     if (!recorder) {
       cleanup();
+      setError('no-recorder');
       return null;
     }
     // Wait for MediaRecorder to flush all buffered audio.
@@ -269,21 +308,46 @@ export function useAudioRecorder() {
       }
     });
     cleanup();
+    const chunkCount = chunksRef.current.length;
     chunksRef.current = [];
-    if (!blob || blob.size === 0) return null;
+    if (!blob || blob.size === 0) {
+      // The encoder handed back nothing at all: a muted or silent input device, or a
+      // MediaRecorder that never emitted a chunk.
+      console.warn('[recorder] empty recording', { chunks: chunkCount, mime: mimeRef.current });
+      setError('empty-recording');
+      return null;
+    }
 
     // Decode the recorded audio to PCM, then downsample to 16 kHz mono WAV.
+    let ctx = null;
     try {
       const arrayBuf = await blob.arrayBuffer();
       const AudioCtx = window.AudioContext || window.webkitAudioContext;
-      const ctx = new AudioCtx();
-      const audioBuf = await ctx.decodeAudioData(arrayBuf);
+      if (!AudioCtx) throw new Error('no AudioContext');
+      ctx = new AudioCtx();
+      const audioBuf = await decodeToPcm(ctx, arrayBuf);
+      if (!audioBuf || typeof audioBuf.getChannelData !== 'function') {
+        throw new Error('decodeAudioData returned no buffer');
+      }
       const channel = audioBuf.getChannelData(0); // mono (first channel)
       const wav = encodeWav(downsample(channel, audioBuf.sampleRate, 16000), 16000);
-      ctx.close().catch(() => {});
-      return blobToBase64(wav);
-    } catch {
+      return await blobToBase64(wav);
+    } catch (e) {
+      // Everything above is local computation, so a failure here is a browser capability
+      // problem -- not the network, the server or the microphone permission.
+      console.warn('[recorder] could not convert the take to WAV', {
+        blobSize: blob.size,
+        mime: blob.type || mimeRef.current,
+        chunks: chunkCount,
+        error: e?.name,
+        message: e?.message,
+      });
+      setError('decode-failed');
       return null;
+    } finally {
+      // Close on every path. The old code only closed on success, so a browser that failed to
+      // decode also leaked an AudioContext per take, and browsers cap how many may exist.
+      if (ctx) ctx.close().catch(() => {});
     }
   }, [cleanup]);
 
