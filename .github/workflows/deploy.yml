@@ -64,6 +64,23 @@ jobs:
       - name: Package the release
         run: git archive --format=tar -o release.tar HEAD
 
+      # Fails the deploy on a malformed id rather than shipping a bundle that quietly
+      # records nothing. Also guarantees the value is safe to interpolate into the remote
+      # command below: digits only cannot break out of the surrounding quotes.
+      - name: Validate the Hotjar site id
+        env:
+          HOTJAR_SITE_ID: ${{ vars.HOTJAR_SITE_ID }}
+        run: |
+          if [ -n "$HOTJAR_SITE_ID" ] && ! printf '%s' "$HOTJAR_SITE_ID" | grep -qE '^[0-9]+$'; then
+            echo "::error::HOTJAR_SITE_ID must be digits only (Settings > Secrets and variables > Actions > Variables). Got: '$HOTJAR_SITE_ID'"
+            exit 1
+          fi
+          if [ -n "$HOTJAR_SITE_ID" ]; then
+            echo "Hotjar will be ENABLED for this build (site id $HOTJAR_SITE_ID)."
+          else
+            echo "HOTJAR_SITE_ID repo variable is unset - Hotjar will be OFF for this build."
+          fi
+
       - name: Set up deploy SSH key
         run: |
           mkdir -p ~/.ssh
@@ -84,6 +101,11 @@ jobs:
 
       - name: Run remote deploy (overlay, backup, build, swap, health-check, auto-rollback)
         id: run-deploy
+        # Passed as a build-time value because Vite freezes VITE_* vars into the bundle. This is
+        # a VARIABLE, not a secret: a Hotjar site id ships in client-side JS that any visitor can
+        # read, and masking it would only make deploy logs harder to read.
+        env:
+          HOTJAR_SITE_ID: ${{ vars.HOTJAR_SITE_ID }}
         run: |
           set +e
           ssh -i ~/.ssh/deploy_key -p "${{ secrets.SSH_PORT }}" -o StrictHostKeyChecking=yes \
@@ -91,7 +113,8 @@ jobs:
             "bash /tmp/deploy-remote-${{ github.run_id }}.sh \
               '${{ env.DEPLOY_PATH }}' \
               '/tmp/release-${{ github.run_id }}.tar' \
-              '${{ env.HEALTH_URL }}'; rm -f /tmp/deploy-remote-${{ github.run_id }}.sh" 2>&1 | tee deploy-output.log
+              '${{ env.HEALTH_URL }}' \
+              '$HOTJAR_SITE_ID'; rm -f /tmp/deploy-remote-${{ github.run_id }}.sh" 2>&1 | tee deploy-output.log
           SSH_EXIT=${PIPESTATUS[0]}
           RESULT=$(grep -o 'DEPLOY_RESULT=[a-z_:]*' deploy-output.log | tail -1 | cut -d= -f2)
           echo "result=${RESULT:-failed:unknown}" >> "$GITHUB_OUTPUT"

@@ -12,6 +12,10 @@ set -uo pipefail
 DEPLOY_PATH="$1"
 RELEASE_TAR="$2"
 HEALTH_URL="$3"
+# Hotjar site id, supplied by the workflow from the HOTJAR_SITE_ID repo VARIABLE (not a secret:
+# it ships in client-side JS). Optional and defaulted so an older workflow that passes only three
+# arguments still runs under `set -u`. Empty = Hotjar off, which is the safe default.
+HOTJAR_SITE_ID="${4:-}"
 
 BACKEND_IMG="communication-tool-backend"
 FRONTEND_IMG="communication-tool-frontend"
@@ -69,6 +73,21 @@ ls -1t "$BACKUP_DIR"/trainer-*.sql.gz 2>/dev/null | tail -n +6 | xargs -r rm -f
 echo "== Tagging currently-running images as :previous (rollback safety net) =="
 docker tag "${BACKEND_IMG}:latest" "${BACKEND_IMG}:previous" 2>/dev/null || echo "  no existing ${BACKEND_IMG}:latest (first-ever deploy)"
 docker tag "${FRONTEND_IMG}:latest" "${FRONTEND_IMG}:previous" 2>/dev/null || echo "  no existing ${FRONTEND_IMG}:latest (first-ever deploy)"
+
+# Exported so docker compose interpolates it into the frontend build arg (see
+# docker-compose.prod.yml). Vite freezes VITE_* vars into the bundle at BUILD time, so this has
+# to be present for THIS build command -- it cannot be set afterwards.
+#
+# A shell variable takes precedence over the same key in the server's .env, which is the whole
+# point: the id comes from GitHub, so nobody needs shell access to the server to change it.
+# Left empty when the repo variable is unset, and an empty build arg means no Hotjar script is
+# ever requested.
+if [ -n "$HOTJAR_SITE_ID" ]; then
+  echo "== Hotjar enabled for this build (site id from the HOTJAR_SITE_ID repo variable) =="
+else
+  echo "== Hotjar OFF for this build (HOTJAR_SITE_ID repo variable is unset) =="
+fi
+export VITE_HOTJAR_SITE_ID="$HOTJAR_SITE_ID"
 
 echo "== Building new images (running containers are NOT touched yet) =="
 if ! $COMPOSE build; then
