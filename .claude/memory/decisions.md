@@ -252,3 +252,17 @@ dependency, schema change, boundary exception, or naming/collision resolution.
 - **Not done:** no automated test. The frontend has no test runner, and adding Vitest is a new
   dependency needing its own decision. `initHotjar()` now returns a boolean specifically so that
   test, when it exists, can assert the off/on/idempotent/non-numeric cases.
+
+### Hotjar site id supplied by GitHub Actions, not the server (2026-08-20)
+- The id now comes from the repo **variable** `HOTJAR_SITE_ID`. `deploy.yml` validates it
+  (digits-only, fails the deploy otherwise) and passes it as a 4th argument to
+  `deploy-remote.sh`, which exports `VITE_HOTJAR_SITE_ID` before `docker compose build`.
+- **Why:** the build runs ON the server, so the value previously had to be in the server's
+  `.env` — which needs shell access nobody on the team currently has. A repo variable makes it
+  changeable by anyone with repo settings access.
+- **Variable, not a secret, deliberately:** the id ships in client-side JS that any visitor can
+  read. Masking it in Actions logs protects nothing and makes deploy output harder to read.
+- A shell variable takes precedence over the same key in the server's `.env`, so the GitHub value
+  wins without the `.env` needing to be touched or even to contain the key.
+- The 4th argument is `${4:-}`, so the script still runs under `set -u` if an older workflow
+  passes only three arguments. Unset variable = empty build arg = Hotjar fully off.

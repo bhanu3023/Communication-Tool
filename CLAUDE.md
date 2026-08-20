@@ -116,6 +116,11 @@ Copy `.env.example` → `.env` and fill in values. Key vars (full list in `.env.
 only the BUILD-time default; the live value is resolved at runtime from
 `frontend/public/runtime-config.js` (which wins, and needs no rebuild). No site id is
 hardcoded in the repo — the committed file holds a `__HOTJAR_SITE_ID__` placeholder.
+In **production** the value comes from the GitHub Actions repo **variable** `HOTJAR_SITE_ID`
+(Settings → Secrets and variables → Actions → Variables). `deploy.yml` validates it is
+digits-only and passes it to `deploy-remote.sh`, which exports it so the server-side
+`docker compose build` bakes it in. A variable, not a secret — it ships in client-side JS.
+Unset = Hotjar off. No server shell access is needed to change it.
 
 ## Common Commands
 
