@@ -228,3 +228,27 @@ dependency, schema change, boundary exception, or naming/collision resolution.
 - **Unverified:** both capture fixes need a real browser and microphone to confirm; they cannot be
   reproduced in this harness. The model change IS verified. Re-run the WER measurement on recordings
   made AFTER these fixes to see whether the opening-word errors actually go away.
+
+
+### Hotjar site id resolved at runtime, never hardcoded (2026-08-20)
+- The Hotjar site id is no longer read straight from the build-time `VITE_HOTJAR_SITE_ID`. A new
+  `frontend/public/runtime-config.js` sets `window.__APP_CONFIG__` before the bundle loads, and
+  `frontend/src/utils/runtimeConfig.js` resolves runtime-first, build-time-second.
+- **Why:** Vite freezes `VITE_*` vars into the bundle, so the previous setup meant a bundle built
+  without an id could never be switched on, and one built with an id could never be switched off,
+  without rebuilding the image. The 2026-08-17 entry already flagged this as a known cost. `public/`
+  is copied verbatim, so this one file is editable on a deployed server with no toolchain.
+- **No id is committed.** The tracked file holds a `__HOTJAR_SITE_ID__` placeholder. The resolver
+  treats the `__NAME__` shape as unset, so an unsubstituted placeholder falls through to the
+  build-time value rather than being requested as a literal id. Both unset = Hotjar fully off.
+- **Asymmetry to know:** writing an id into `runtime-config.js` turns recording ON for a bundle
+  built without one. Writing `""` there cannot turn it OFF, because a blank runtime value falls
+  through to the baked-in build value. Disabling a bundle with an id baked in needs a rebuild.
+- **Alternative rejected:** committing the real id. It is not a secret (it ships in client-side JS),
+  so this was defensible, but it hardcodes an environment-specific value into the repo and gives
+  every deploy the same id whether it wants recording or not.
+- **Resolver placed in `utils/`, not a new `config/` folder** — `.claude/rules/architecture-boundaries.md`
+  bars new frontend top-level folders without an architect decision.
+- **Not done:** no automated test. The frontend has no test runner, and adding Vitest is a new
+  dependency needing its own decision. `initHotjar()` now returns a boolean specifically so that
+  test, when it exists, can assert the off/on/idempotent/non-numeric cases.

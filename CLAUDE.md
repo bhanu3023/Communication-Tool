@@ -112,7 +112,10 @@ Copy `.env.example` → `.env` and fill in values. Key vars (full list in `.env.
 `APP_JWT_EXPIRATION_MINUTES`, `APP_CORS_ORIGINS`; `OPENAI_API_KEY` (+ `OPENAI_MODEL`,
 `OPENAI_AUDIO_MODEL`, `OPENAI_TRANSCRIBE_MODEL`) — optional (mock fallback);
 `APP_DEV_LOGIN_ENABLED`/`VITE_DEV_LOGIN` — keep `false` outside dev;
-`VITE_HOTJAR_SITE_ID` — optional, enables Hotjar session recording (blank = disabled).
+`VITE_HOTJAR_SITE_ID` — optional, enables Hotjar session recording (blank = disabled). This is
+only the BUILD-time default; the live value is resolved at runtime from
+`frontend/public/runtime-config.js` (which wins, and needs no rebuild). No site id is
+hardcoded in the repo — the committed file holds a `__HOTJAR_SITE_ID__` placeholder.
 
 ## Common Commands
 

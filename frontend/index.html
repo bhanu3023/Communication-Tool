@@ -12,6 +12,10 @@
       rel="stylesheet"
     />
     <title>AI Communication Skills Trainer — CloudFuze</title>
+    <!-- Runtime config (Hotjar site id). Plain script, not a module, and BEFORE the bundle so
+         window.__APP_CONFIG__ exists by the time main.jsx runs. Copied verbatim from public/,
+         so it can be edited on the server without rebuilding. -->
+    <script src="/runtime-config.js"></script>
   </head>
   <body>
     <div id="root"></div>
