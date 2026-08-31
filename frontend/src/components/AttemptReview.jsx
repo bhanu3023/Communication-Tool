@@ -157,6 +157,9 @@ export function SpeakingSection({ details, score, showHeader = true, sessionId, 
           const ev = it.evaluation || {};
           const said = (it.transcript || '').trim();
           const tips = Array.isArray(ev.suggestions) ? ev.suggestions : [];
+          // Itemised corrections, one per error however small. Absent on attempts recorded
+          // before the examiner returned this list, hence the guard rather than a default.
+          const misses = Array.isArray(ev.mistakes) ? ev.mistakes : [];
           return (
             <Paper variant="outlined" key={i} sx={{ p: 2.5, mb: 2, borderRadius: 3 }}>
               {/* Header: sentence number + overall score badge */}
@@ -241,11 +244,40 @@ export function SpeakingSection({ details, score, showHeader = true, sessionId, 
               </Box>
 
               {/* Sub-scores as clean stat tiles */}
-              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: tips.length ? 2 : 0 }}>
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: tips.length || misses.length ? 2 : 0 }}>
                 {SPEAKING_DIMS.map(([label, key]) =>
                   ev[key] != null ? <SubScore key={key} label={label} value={ev[key]} /> : null,
                 )}
               </Box>
+
+              {/* Every error the examiner is confident the SPEAKER made, each with its correction
+                  and a reason. Deliberately separate from the coaching below: this is the list of
+                  what was wrong, that is the lesson drawn from it. */}
+              {misses.length > 0 && (
+                <Box
+                  sx={{
+                    bgcolor: 'rgba(198,40,40,0.04)',
+                    border: '1px solid rgba(198,40,40,0.18)',
+                    borderRadius: 2,
+                    p: 1.5,
+                    mb: tips.length ? 1.5 : 0,
+                  }}
+                >
+                  <Typography
+                    variant="caption"
+                    sx={{ fontWeight: 700, color: 'error.main', textTransform: 'uppercase', letterSpacing: 0.5 }}
+                  >
+                    Mistakes ({misses.length})
+                  </Typography>
+                  <Box component="ul" sx={{ m: '4px 0 0', pl: 2.5 }}>
+                    {misses.map((m, j) => (
+                      <Typography key={j} component="li" variant="body2" sx={{ mb: 0.25 }}>
+                        {m}
+                      </Typography>
+                    ))}
+                  </Box>
+                </Box>
+              )}
 
               {/* Feedback callout: opens with a strength, then fixes, then a line to practise. */}
               {tips.length > 0 && (

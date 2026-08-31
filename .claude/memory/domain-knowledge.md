@@ -47,9 +47,25 @@ or assessment logic.
     they are held at a neutral 60-75. Azure Speech (the only path that could score pronunciation
     acoustically) was removed in `5588da3`. Measuring fluency from whisper's timings was tried and
     rejected — see [[decisions]] (2026-08-18).
+  - **Every genuine error is itemised** in a `mistakes` array (added 2026-09-01), each entry
+    quoting what was said, giving the correction and a short reason. The transcription evidence bar
+    governs this list as much as the score: a near-homophone, an acoustic neighbour or a normalised
+    number is left out entirely rather than teaching a candidate to fix something they never did.
+    Spelling, hyphens, spacing and capitalisation are banned from it — the input is lowercased and
+    de-punctuated before the examiner sees it, so there is nothing there to judge.
 - **Writing** — 10-dimension rubric: grammar, clarity, vocabulary, tone, professionalism, structure,
   readability, completeness, spelling, conciseness — plus mistakes, suggestions, and an improved
   version. Section score = average of the 10 dimensions.
+  - **`mistakes` is exhaustive, not a summary**: one entry per error however small — a missing
+    article, a wrong preposition, a comma splice, a lower-case sentence start, a singular for a
+    plural — each with the correction AND a plain reason, because a correction nobody understands
+    teaches nothing. Corrections may never appear in `suggestions`; a correction hidden among the
+    tips is one the candidate cannot count.
+- **Strictness (2026-09-01).** Both examiners mark to tighter bands: one error of any size means a
+  field is not 100, and three or more small errors keep a field at or below 84. What strict does NOT
+  mean: inventing faults, deducting twice for the same fault across the ten writing fields, or
+  marking anything the transcriber may have produced from correct speech. Expect scores on the same
+  answer to sit a few points below what the earlier prompts gave; the pass mark stays 75.
 - **Overall** — the README describes overall = mean of the three sections, but the **code does
   not compute a numeric combined score**; sections are tracked independently by design
   (`AttemptPolicy.java:9-14`, `AssessmentSession.java:18-21`). `buildOverall` only produces feedback

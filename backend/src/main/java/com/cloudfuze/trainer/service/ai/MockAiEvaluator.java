@@ -22,7 +22,7 @@ public class MockAiEvaluator {
 
         // No speech captured -> zero across the board. Skipping must never score.
         if (said.isBlank()) {
-            return new SpeakingEvaluation(0, 0, 0, 0, 0, 0, 0,
+            return new SpeakingEvaluation(0, 0, 0, 0, 0, 0, 0, List.of(),
                     List.of("No speech was detected. Press Record and repeat the sentence aloud."));
         }
 
@@ -52,8 +52,10 @@ public class MockAiEvaluator {
         if (lengthRatio < 0.6) suggestions.add("Say the complete sentence; part of it was missing.");
         if (suggestions.isEmpty()) suggestions.add("Excellent delivery — keep it up.");
 
+        // No mistakes list from the fallback: it compares word overlap and cannot tell a wrong
+        // preposition from a mis-transcription, and a made-up correction is worse than none.
         return new SpeakingEvaluation(round(pronunciation), round(accuracy), round(fluency),
-                round(grammar), round(vocabulary), round(confidence), overall, suggestions);
+                round(grammar), round(vocabulary), round(confidence), overall, List.of(), suggestions);
     }
 
     public WritingEvaluation scoreWriting(String category, String prompt, String content) {

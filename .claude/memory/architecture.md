@@ -43,13 +43,21 @@ its two tasks from two pools independently — a `Customer Email` prompt and a n
 
 ## Scoring (see [[domain-knowledge]])
 - Listening: MCQ, 10/correct (max 100), deterministic AI summary.
-- Speaking: weighted rubric acc 60 / gram 15 / vocab 15 / pron 5 / flu 3 / conf 2; section = average.
+- Speaking: weighted rubric acc .30 / gram .22 / vocab .18 / pron .20 / flu .05 / conf .05; section
+  = average. (The old acc 60 / gram 15 / vocab 15 / pron 5 / flu 3 / conf 2 split measured recall,
+  not English, and was replaced when the Level 2 sentences grew past 50 words.)
   Scored from the server-side transcription of the recording (whisper), never the browser transcript.
   The rubric is accent-fair for Indian-English freshers: pronunciation is judged as intelligibility
   (capped 95), while fluency and confidence cannot be heard at all and are held near 70 on token
   weight. In the TEST the candidate plays back the take they just recorded; in FEEDBACK they read the
   transcript of it and there is no player (see [[decisions]]).
 - Writing: 10-dimension rubric average + mistakes/suggestions/improved version.
+- Both AI-scored sections return a `mistakes` array beside `suggestions`: every error the examiner
+  is confident the candidate made, one entry each, quoted with its correction and a short reason.
+  The two arrays are deliberately different jobs — `mistakes` is the complete record of what was
+  wrong, `suggestions` teaches the pattern behind it and never repeats a correction. Speaking gained
+  the field in 2026-09-01; attempts recorded before that have no such key, so every reader guards
+  with `Array.isArray`.
 - Weak area = lowest section; **pass mark = 75** per section (pass/fail status). NB: README says
   "overall = mean of sections" but the code does not compute a numeric combined score — sections are
   independent by design (see [[domain-knowledge]] / [[decisions]]). Doc/code discrepancy to resolve.

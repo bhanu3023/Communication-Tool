@@ -299,3 +299,44 @@ dependency, schema change, boundary exception, or naming/collision resolution.
 - **Verified** by booting the backend against a throwaway Postgres: 41 Level 2 stories, 410
   questions (every story exactly 10), 201 + 201 writing prompts, and a second boot changed no
   counts, which is the seed-guard check.
+
+
+### Stricter examiners, and every small mistake itemised with a reason (2026-09-01)
+- **Asked for:** a stricter English evaluator, and feedback that shows the small mistakes and
+  explains them rather than passing over them.
+- **Two separate changes, deliberately.** Strictness is a SCORING change: the bands tightened so
+  one error of any size stops a field reaching 100, and three or more small errors hold a field at
+  or below 84. Showing the small mistakes is a FEEDBACK change: both examiners now return an
+  itemised `mistakes` array, one entry per error, quoting it, correcting it and giving a plain
+  reason. Conflating the two would have meant either silent deductions or noisy nit-picking.
+- **`SpeakingEvaluation` gained a `mistakes` component** to match Writing, rendered in both places
+  speaking feedback appears (`AttemptReview.jsx`, `assessment/Speaking.jsx`). Older attempts have
+  no such key, so every reader guards with `Array.isArray`.
+- **Corrections may no longer appear in `suggestions`.** Before the change the writing examiner put
+  half its corrections in the tips, so a candidate reading the mistakes list saw an incomplete
+  record. Tips now name the PATTERN behind the errors; the list carries the corrections. Measured
+  on the same answer: mistakes went 3 -> 4 and the tips stopped duplicating them.
+- **What strict does NOT relax: the transcription evidence bar.** Speaking is marked from a
+  transcript with ~13% WER, so the prompt still forbids marking — or listing — anything that could
+  be the transcriber mishearing correct speech, and still bans spelling, hyphen, spacing and
+  capitalisation entries because the text is lowercased and de-punctuated before it is seen. This
+  is not theoretical: the first draft of the stricter prompt produced "you said 'before thursday',
+  say 'before Thursday'" on lowercased input. Repeating the ban inside the mistakes instruction,
+  rather than only at the end of the prompt, removed it.
+- **Verified against the live model**, not by reading the prompt: a script parses the concatenated
+  Java literals out of `AiService.java` and calls gpt-4o-mini with them, so what is tested is what
+  ships. A speaking answer with two small errors returned exactly those two, each with a reason,
+  and grammar/vocabulary 80 rather than the 100 the old bands invited. A writing answer with four
+  small errors returned all four and averaged 80.5-83.
+- **Trap worth recording for anyone repeating that check:** extracting the prompt must start at the
+  OPENING quote of the literal, not at a marker inside it. Starting mid-literal makes the closing
+  quote read as an opening one, silently dropping every other literal — half the prompt. The first
+  run did exactly that and produced a writing response with no numeric fields at all, which looked
+  like a serious regression and was an artefact of the harness.
+- **Consequence to expect:** the same answer now scores a few points lower than it did last month.
+  The pass mark stays 75, and an employee comparing a new attempt against an older one is comparing
+  against a more lenient examiner — the improvement delta shown in feedback is not like-for-like
+  across this date.
+- **Also corrected here:** `architecture.md` still documented the pre-`a10c3be` speaking weights
+  (acc 60 / gram 15 / vocab 15 / pron 5 / flu 3 / conf 2). The code has used acc .30 / gram .22 /
+  vocab .18 / pron .20 / flu .05 / conf .05 since that commit.

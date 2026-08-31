@@ -156,11 +156,31 @@ public class AiService {
                         + "American or British, and never use the words 'accent' or 'mother tongue'. Being fair "
                         + "about the accent is not being lenient about the English.\n"
 
-                        + "USE THE FULL 0-100 RANGE AND DO NOT INFLATE. Bands for grammar and vocabulary: 90-100 "
-                        + "clean, natural professional English; 75-89 correct with a slip or two; 60-74 "
-                        + "understandable but with clear errors; 40-59 effortful, several errors; below 40 "
-                        + "broken. A genuinely strong answer must be able to reach the 90s — do not shave marks "
-                        + "off a good one just to look strict.\n"
+                        + "USE THE FULL 0-100 RANGE AND MARK STRICTLY. Bands for grammar and vocabulary: "
+                        + "95-100 flawless, not one error of any size; 85-94 one small slip; 70-84 two or "
+                        + "three small errors, or one that changes the meaning; 55-69 errors throughout but "
+                        + "still understandable; 35-54 effortful, several errors; below 35 broken. ONE genuine "
+                        + "error means the field cannot be 100. A missing article, a wrong preposition, a "
+                        + "plural that does not agree — each of these is a real error and must cost the mark it "
+                        + "is worth; do not round a nearly-clean answer up to a clean one. Strictness means "
+                        + "marking what is actually there, so a genuinely faultless answer must still reach the "
+                        + "90s: do not invent a fault to look rigorous.\n"
+
+                        + "LIST EVERY MISTAKE, INCLUDING THE SMALL ONES. Return a 'mistakes' array with one "
+                        + "entry per error — exhaustive, never summarised, never just the biggest three. This "
+                        + "list is where the candidate finds out what was actually wrong, so the small errors "
+                        + "everyone lets pass are exactly the ones to name: a missing or wrong article (a / an "
+                        + "/ the), a wrong preposition, a plural or subject-verb disagreement, a wrong tense or "
+                        + "verb form, awkward word order, a missing connective, and any word used with the "
+                        + "wrong meaning. Write each entry as: you said \"X\", say \"Y\" — then a SHORT plain "
+                        + "reason a first-year employee would understand. The reason is NOT optional; a "
+                        + "correction nobody understands teaches nothing.\n"
+                        + "THE EVIDENCE BAR APPLIES TO THIS LIST TOO, and nothing above relaxes it. Only list "
+                        + "something you are confident the SPEAKER said. If the difference could plausibly be "
+                        + "the transcriber mishearing correct speech — a near-homophone, an acoustic "
+                        + "neighbour, a split or joined compound, a normalised number — leave it out entirely "
+                        + "rather than teach a candidate to fix something they never did. Return an empty array "
+                        + "for a faultless answer; an empty array is a real result, not a failure to look.\n"
 
                         + "NOW COACH THEM. Return a 'suggestions' array of 2 to 4 tips. This feedback is the only "
                         + "English teaching most of these candidates receive, so every tip must be something they "
@@ -168,8 +188,10 @@ public class AiService {
                         + "1. Open with ONE tip naming a real strength in THIS answer, quoting the part they "
                         + "handled well. Never vague praise like 'good job' — say what was good and why it "
                         + "worked.\n"
-                        + "2. For each fault, QUOTE what they said, give the CORRECTED form in quotes, and add a "
-                        + "short reason a colleague would understand — you said X, say Y instead, because Z.\n"
+                        + "2. Do NOT repeat the 'mistakes' list item by item here — that list already carries "
+                        + "every correction. Take the ONE fault that matters most, name the pattern behind it "
+                        + "(the rule they are getting wrong, not just this instance), and show them how to get "
+                        + "it right next time.\n"
                         + "3. Finish with ONE line they can practise ALOUD: eight to fifteen words using the word "
                         + "or structure they got wrong, in the same migration context, so they leave with "
                         + "something to rehearse.\n"
@@ -177,11 +199,12 @@ public class AiService {
                         + "hardest part they got right, and still leave them one harder line to practise.\n"
                         + "5. Speak TO the candidate as 'you'. Be warm, specific and direct. No jargon, no "
                         + "examiner-speak, and never restate the score.\n"
-                        + "NEVER write a tip about spelling, hyphens, spacing, capitalisation or how a word was "
-                        + "written down. The candidate is SPEAKING, not typing: they cannot pronounce a hyphen "
-                        + "and they did not choose how the transcriber spelled anything.\n"
+                        + "NEVER write a tip OR a mistake entry about spelling, hyphens, spacing, "
+                        + "capitalisation or how a word was written down. The candidate is SPEAKING, not "
+                        + "typing: they cannot pronounce a hyphen and they did not choose how the transcriber "
+                        + "spelled anything.\n"
                         + "Return JSON numeric fields (0-100): pronunciation, accuracy, fluency, grammar, "
-                        + "vocabulary, confidence, plus the 'suggestions' array.",
+                        + "vocabulary, confidence, plus the 'mistakes' and 'suggestions' arrays.",
                 "Target sentence: \"" + forComparison(expected) + "\"\n"
                         + "Heard in the recording: \"" + forComparison(transcript) + "\"");
         if (node == null) {
@@ -210,7 +233,8 @@ public class AiService {
         double vocabulary = Math.min(num(node, "vocabulary"), ceiling);
         double overall = weightedOverall(pronunciation, accuracy, fluency, grammar, vocabulary, confidence);
         return new SpeakingEvaluation(round(pronunciation), round(accuracy), round(fluency),
-                round(grammar), round(vocabulary), round(confidence), overall, strings(node, "suggestions"));
+                round(grammar), round(vocabulary), round(confidence), overall,
+                strings(node, "mistakes"), strings(node, "suggestions"));
     }
 
     /**
@@ -337,7 +361,8 @@ public class AiService {
         double confidence = num(node, "confidence");
         double overall = weightedOverall(pronunciation, accuracy, fluency, grammar, vocabulary, confidence);
         return new SpeakingEvaluation(round(pronunciation), round(accuracy), round(fluency),
-                round(grammar), round(vocabulary), round(confidence), overall, strings(node, "suggestions"));
+                round(grammar), round(vocabulary), round(confidence), overall,
+                strings(node, "mistakes"), strings(node, "suggestions"));
     }
 
     /**
@@ -376,18 +401,23 @@ public class AiService {
                         + "wrote a response. Your job is to give them an honest mark AND teach them how to do it "
                         + "better next time.\n"
 
-                        + "PITCH THE BAR AT A COMPETENT FIRST-YEAR EMPLOYEE, NOT A SENIOR CONSULTANT. The "
-                        + "question is: would a colleague or a customer understand this, be able to act on it, and "
-                        + "find it professional? It does NOT have to be elegant, perfectly balanced, or the way you "
-                        + "would have written it. If a manager could send it after one or two small edits, that is "
-                        + "a good answer and must score in the 80s.\n"
+                        + "PITCH THE BAR AT A COMPETENT FIRST-YEAR EMPLOYEE, NOT A SENIOR CONSULTANT — and "
+                        + "then mark what they actually wrote, strictly. The question is: would a colleague or "
+                        + "a customer understand this, be able to act on it, and find it professional? It does "
+                        + "NOT have to be elegant, perfectly balanced, or the way you would have written it. But "
+                        + "every real error costs a mark. An answer a manager could send after one or two small "
+                        + "edits is a GOOD answer, not a perfect one: it belongs in the 80s and must not reach "
+                        + "the 90s while those edits are still needed.\n"
 
-                        + "BANDS. 90-100 ready to send as it stands. 80-89 clear and professional, one or two "
-                        + "small fixes. 70-79 does the job and covers the task, several fixable issues. 55-69 "
-                        + "understandable but would need rewriting before anyone sent it. 35-54 confusing, or "
-                        + "missing something the situation required. Below 35 off-topic, one line, or unusable. "
-                        + "Use the whole range honestly — do not inflate a weak answer, and do not shave marks off "
-                        + "a decent one to look rigorous.\n"
+                        + "BANDS. 95-100 ready to send exactly as it stands, with nothing at all to change. "
+                        + "85-94 clear and professional, one or two small fixes. 72-84 does the job and covers "
+                        + "the task, several small fixes or one substantive gap. 55-71 understandable but would "
+                        + "need rewriting before anyone sent it. 35-54 confusing, or missing something the "
+                        + "situation required. Below 35 off-topic, one line, or unusable. Use the whole range "
+                        + "honestly: three or more small errors belonging to one field cannot leave that field "
+                        + "above 84, and a single error of any size means that field is not 100. Strictness "
+                        + "means marking what is there — a field with genuinely nothing wrong in it still scores "
+                        + "as such, and a strong answer must still be able to reach the 90s.\n"
 
                         + "SCORE EACH FAULT ONCE, IN THE FIELD IT BELONGS TO. This is the most important "
                         + "instruction here. The ten fields are averaged, so marking one clumsy sentence down "
@@ -395,7 +425,9 @@ public class AiService {
                         + "single fault five times and drags an average answer into the forties. A spelling "
                         + "mistake is a spelling mistake: it is not also a professionalism failure. A missing "
                         + "deadline is completeness, not tone. Only lower a field when THAT field is genuinely "
-                        + "weak on its own terms.\n"
+                        + "weak on its own terms. This rule governs the SCORE only: listing an error in "
+                        + "'mistakes' is not a second deduction, so the list below stays exhaustive even where "
+                        + "the fault has already been counted once in the field it belongs to.\n"
 
                         + "Score each field 0-100: grammar, spelling, clarity, vocabulary, tone (right for the "
                         + "reader — warm and reassuring to a customer, brief and direct to a manager), "
@@ -432,10 +464,34 @@ public class AiService {
                         + "should be 1,250,000\"). A figure already grouped in threes and already in dollars is "
                         + "CORRECT: say nothing about it.\n"
 
-                        + "NOW TEACH. 'mistakes' lists concrete errors, each quoting what they wrote and giving "
-                        + "the correction. 'suggestions' gives 2-4 specific improvements they can act on — start "
-                        + "with ONE thing this answer genuinely did well, quoting it, then the rest as "
-                        + "you-wrote-X, write-Y-instead, because-Z. Speak to them as 'you', warmly and plainly, "
+                        + "NOW TEACH, AND MISS NOTHING. 'mistakes' is an EXHAUSTIVE list of every error in what "
+                        + "they wrote, however small, one entry per error — not a summary, and not the three "
+                        + "biggest. The small ones are the whole point of this list, because nobody has ever "
+                        + "told them: a missing or wrong article (a / an / the), a wrong preposition, a plural "
+                        + "or subject-verb disagreement, a wrong tense or verb form, a missing comma or a comma "
+                        + "splice, a missing full stop, a lower-case sentence start or proper noun, a doubled "
+                        + "or missing space, a misspelling, a wrong word choice, and a sentence a reader has to "
+                        + "read twice. Write each entry as: you wrote \"X\", write \"Y\" — then a SHORT plain "
+                        + "reason. The reason is NOT optional: a correction without one teaches nothing and "
+                        + "reads as nit-picking. Where a whole sentence is clumsy rather than wrong, quote it, "
+                        + "give the rewritten version, and say what made it hard to read. If there is genuinely "
+                        + "nothing wrong, return an empty array rather than inventing a fault to fill it.\n"
+                        + "BEFORE YOU RETURN, SWEEP THE TEXT ONCE MORE, sentence by sentence, looking "
+                        + "specifically for the things a quick read misses: a comma missing between two joined "
+                        + "clauses or after an opening phrase, a sentence with no full stop, a lower-case start, "
+                        + "an abbreviation without its full stop, a singular where the plural is meant, and an "
+                        + "article that should be there. Add any you find. Accuracy still governs: only add "
+                        + "something that is genuinely wrong, and never emit a correction identical to what they "
+                        + "already wrote.\n"
+                        + "EVERY CORRECTION BELONGS IN 'mistakes', NEVER IN 'suggestions'. If you find "
+                        + "yourself writing you-wrote-X-write-Y in a suggestion, it is a mistake entry and "
+                        + "belongs in that array instead — a correction hidden among the tips is a correction "
+                        + "the candidate cannot count, and the mistakes list must be the complete record.\n"
+                        + "'suggestions' gives 2-4 improvements ABOUT THE ANSWER AS A WHOLE — start "
+                        + "with ONE thing this answer genuinely did well, quoting it; then, rather than "
+                        + "repeating individual corrections, name the PATTERN behind the errors you found (the "
+                        + "rule they keep missing), what a reader loses because of it, and what to do "
+                        + "differently next time. Speak to them as 'you', warmly and plainly, "
                         + "and never restate the score. 'improvedVersion' is a polished, ready-to-send model "
                         + "answer for THIS exact situation, close enough to what they wrote that they can see how "
                         + "their own attempt becomes it.\n"

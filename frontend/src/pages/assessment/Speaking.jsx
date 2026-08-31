@@ -676,12 +676,30 @@ export default function Speaking() {
                       : 'No speech was detected in your recording for this sentence.'}
                 </Typography>
 
-                <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mb: ev.suggestions?.length ? 2 : 0 }}>
+                <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap
+                  sx={{ mb: ev.suggestions?.length || ev.mistakes?.length ? 2 : 0 }}>
                   {DIMENSIONS.map(([label, key]) => (
                     <Chip key={key} size="small" variant="outlined" color={scoreColor(ev[key] ?? 0)}
                       label={`${label} ${Math.round(ev[key] ?? 0)}`} />
                   ))}
                 </Stack>
+
+                {/* Itemised corrections, small ones included. Shown before the coaching so the
+                    candidate sees WHAT was wrong before reading what to do about it. */}
+                {Array.isArray(ev.mistakes) && ev.mistakes.length > 0 && (
+                  <Box sx={{ mb: ev.suggestions?.length ? 2 : 0 }}>
+                    <Typography variant="caption" color="error.main" sx={{ fontWeight: 700 }}>
+                      Mistakes ({ev.mistakes.length})
+                    </Typography>
+                    <Box component="ul" sx={{ m: '4px 0 0', pl: 2.5 }}>
+                      {ev.mistakes.map((m, j) => (
+                        <Typography key={j} component="li" variant="body2" sx={{ mb: 0.25 }}>
+                          {m}
+                        </Typography>
+                      ))}
+                    </Box>
+                  </Box>
+                )}
 
                 {Array.isArray(ev.suggestions) && ev.suggestions.length > 0 && (
                   <Box>
