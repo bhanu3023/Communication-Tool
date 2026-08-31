@@ -340,3 +340,32 @@ dependency, schema change, boundary exception, or naming/collision resolution.
 - **Also corrected here:** `architecture.md` still documented the pre-`a10c3be` speaking weights
   (acc 60 / gram 15 / vocab 15 / pron 5 / flu 3 / conf 2). The code has used acc .30 / gram .22 /
   vocab .18 / pron .20 / flu .05 / conf .05 since that commit.
+
+
+### A mistake is an error, not a preference — and what a real attempt showed (2026-09-01)
+- Follow-up to the stricter-examiner entry above, after taking a REAL attempt (writing and
+  speaking) against a backend built from that commit, with the live key and real TTS audio.
+- **The mistakes list was accepting three things it should refuse**: a synonym swap of correct
+  wording ("finished" -> "complete"), a stylistic preference ("very high" -> "significant"), and
+  content the answer failed to cover ("the email does not address..."). The prompt now says a
+  mistake is something WRONG rather than a phrasing the examiner prefers, forbids synonym swaps
+  outright, and sends anything the answer failed to SAY to completeness and a suggestion instead —
+  a candidate cannot fix a missing fact by rewriting the words they used.
+- **Most of that noise turned out to be my test, not the prompt.** Every attempt now draws
+  different prompts (the content-assignment change working as designed), while the harness kept
+  submitting the same two answers — so from attempt two onwards the examiner was correctly
+  reporting that the answer did not address the scenario it had been given. Pinning scenario and
+  answer removed nearly all of it. Worth remembering: an end-to-end attempt can no longer be
+  re-run with fixed answers, and a prompt A/B has to pin both sides.
+- **Measured, scenario pinned, six errors planted in one answer:** gpt-4o-mini found 5 with ZERO
+  false entries and was identical across runs; gpt-4o found 6 but added a stylistic entry each
+  run ("Regards," -> "Best regards,"). Staying on gpt-4o-mini: for a list a learner reads, a
+  wrong entry costs more than a missed one, and it is a fraction of the price.
+- **Speaking verified end to end**, which had never been done for this path: the target sentence
+  was synthesized with a deliberate tense slip (OpenAI TTS), uploaded as a take, transcribed by
+  gpt-4o-transcribe and scored. It returned exactly one mistake — you said "move", say "moved" —
+  with grammar 85, and zero mistakes on the sentence read correctly. No spelling or capitalisation
+  entries appeared despite the transcript being punctuated, which is the artefact ban holding.
+- **Level 2 could not be exercised through the app**: it is gated behind a best score of 75 in all
+  three Level 1 sections, so the new Level 2 banks were verified by seeding and by direct prompt
+  runs, not by an attempt.
