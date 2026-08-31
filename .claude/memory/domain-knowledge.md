@@ -79,3 +79,18 @@ or assessment logic.
 `data.sql` seeds departments/teams, managers + employees (reports each), and the Listening/Speaking/
 Writing content banks — idempotently. Exact counts evolve; do not hardcode them in tests beyond what
 a test explicitly seeds.
+
+The Level 2 banks live in separate files under `resources/seed/`, listed in `application.yml`
+under `spring.sql.init.data-locations` (a file not in that list is never executed):
+`speaking-level2-sets.sql`, `listening-level2-stories.sql`, `writing-level2-prompts.sql`. They
+guard on a `seed_state` marker rather than on row existence, because data.sql guards its own
+Level 2 inserts with `NOT EXISTS (... WHERE level = 2)`, which is already true in production —
+rows appended there would never load on a live database. Bump a marker key to push a revision.
+
+Bank sizes are chosen against 100 candidates taking 2 attempts a year, which is 200 assignments
+per section. Speaking and Writing are sized so no two candidates need ever share (201 disjoint
+speaking sets; 201 email and 201 non-email prompts). Listening is deliberately smaller — 41
+stories — because a story is ~300 words plus 10 questions and 200 could not be held to that
+standard; each is heard roughly five times a year by different people. In every section
+`ContentAssignmentService`/`SpeakingSetService` still guarantee that no individual candidate
+repeats their own content.

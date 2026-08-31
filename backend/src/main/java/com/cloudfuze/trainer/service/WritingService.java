@@ -105,17 +105,17 @@ public class WritingService {
     private static final int EMAIL_MIN_WORDS_L2 = 120;
     private static final int OTHER_MIN_WORDS_L2 = 150;
 
-    private final ContentService contentService;
+    private final ContentAssignmentService contentAssignmentService;
     private final SessionService sessionService;
     private final WritingPromptRepository promptRepository;
     private final AiService aiService;
     private final JsonUtil json;
     private final AuditService auditService;
 
-    public WritingService(ContentService contentService, SessionService sessionService,
+    public WritingService(ContentAssignmentService contentAssignmentService, SessionService sessionService,
                           WritingPromptRepository promptRepository, AiService aiService,
                           JsonUtil json, AuditService auditService) {
-        this.contentService = contentService;
+        this.contentAssignmentService = contentAssignmentService;
         this.sessionService = sessionService;
         this.promptRepository = promptRepository;
         this.aiService = aiService;
@@ -127,7 +127,7 @@ public class WritingService {
     public WritingDtos.StartResponse start(User user, int level) {
         AssessmentSession session = sessionService.getOrCreateActiveSection(user, Section.WRITING, level);
         // Prompt 1 is always a customer email; prompt 2 is a varied task.
-        List<WritingPrompt> prompts = contentService.writingPrompts(session.getLevel());
+        List<WritingPrompt> prompts = contentAssignmentService.promptsForSession(user, session);
         List<WritingDtos.PromptView> views = new ArrayList<>();
         int i = 1;
         boolean advanced = session.getLevel() >= AttemptPolicy.LEVEL_TWO;

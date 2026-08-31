@@ -18,12 +18,12 @@ docs/ARCHITECTURE.md
 | App bootstrap | `TrainerApplication.java` |
 | Config | `config/SecurityConfig.java`, `config/AiConfig.java`, `config/OpenApiConfig.java` |
 | Auth (Azure→JWT) | `security/AzureTokenVerifier`, `security/JwtService`, `security/JwtAuthenticationFilter`, `security/AppPrincipal`, `security/CurrentUser`; `service/AuthService`; `controller/AuthController` |
-| Assessments | `controller/{Listening,Speaking,Writing}Controller` → `service/{Listening,Speaking,Writing}Service` (+ `SpeakingSetService`) |
+| Assessments | `controller/{Listening,Speaking,Writing}Controller` → `service/{Listening,Speaking,Writing}Service` (+ `SpeakingSetService`, `ContentAssignmentService`) |
 | AI facade | `service/ai/AiService`, `OpenAiClient`, `MockAiEvaluator`, and result records (`SpeakingEvaluation`, `WritingEvaluation`, `ListeningSummary`, `OverallFeedback`, `AiDetection`) |
 | Sessions/scoring | `entity/AssessmentSession`, `entity/SectionResult`; `service/SessionService`, `service/AttemptService`, `service/AttemptPolicy`, `entity/SectionAttemptControl`; `service/AttemptDetailService` |
 | Manager/reporting | `controller/ManagerController` → `service/ManagerService`; `service/PdfService`; `service/DashboardService`; `entity/ManagerComment` |
 | Proctoring | `controller/ProctorController` → `service/ProctorService`; `entity/ProctorEvent` |
-| Content banks | `entity/{ListeningQuestion,ListeningStory,SpeakingSentence,SpeakingRecording,WritingPrompt}`; `service/ContentService`; matching `repository/*` |
+| Content banks | `entity/{ListeningQuestion,ListeningStory,SpeakingSentence,SpeakingRecording,WritingPrompt}`; `service/ContentService` (shared vocabulary only); selection lives in `service/SpeakingSetService` + `service/ContentAssignmentService`; matching `repository/*` |
 | Core entities | `entity/{User,Department,Team,Notification,AuditLog,BaseEntity}` |
 | DTOs (records) | `dto/<module>/<Module>Dtos.java` (auth, dashboard, listening, speaking, writing, manager, proctor) + top-level `SectionScoreResponse`, `ProfileDto`, `AttemptDetail`, `SectionScoreResponse` |
 | Enums | `domain/{Role,Section,Difficulty,SessionStatus}` |

@@ -29,6 +29,18 @@ Three assessment modules (Listening / Speaking / Writing), each: controller `/ap
 (`ProctorEvent`), `ManagerController`/`ManagerService` (team + PDF via `PdfService`), `DashboardService`,
 `AttemptService`/`AttemptPolicy`/`SectionAttemptControl`.
 
+## Content selection (no repeats)
+All three modules pick content the same way, and the choice is **pinned to the session** so a
+reload mid-attempt cannot change it. `SpeakingSetService` does this for Speaking;
+`ContentAssignmentService` does it for Listening and Writing. `AssessmentSession` therefore
+carries `speaking_set_number`, `listening_story_id`, `writing_email_prompt_id` and
+`writing_other_prompt_id` — all nullable, because `ddl-auto=update` cannot add a NOT NULL column
+to a populated table and attempts predating them have no value. Selection rule: exclude anything
+the candidate has already been served at that level, then prefer the item served least recently
+across all candidates, so the bank spreads instead of clustering. Falling back to the whole pool
+when a candidate has exhausted it keeps an attempt possible rather than failing it. Writing draws
+its two tasks from two pools independently — a `Customer Email` prompt and a non-email one.
+
 ## Scoring (see [[domain-knowledge]])
 - Listening: MCQ, 10/correct (max 100), deterministic AI summary.
 - Speaking: weighted rubric acc 60 / gram 15 / vocab 15 / pron 5 / flu 3 / conf 2; section = average.

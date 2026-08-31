@@ -50,6 +50,25 @@ public class AssessmentSession extends BaseEntity {
     @Column(name = "speaking_set_number")
     private Integer speakingSetNumber;
 
+    /**
+     * For LISTENING attempts: which story was served. Pinned on first start so that a reload
+     * shows the same story instead of drawing a new one, and recorded so that a later attempt
+     * by the same user can avoid it.
+     *
+     * <p>Nullable deliberately: ddl-auto=update cannot add a NOT NULL column to a populated
+     * table, and attempts predating this column legitimately have no value.
+     */
+    @Column(name = "listening_story_id")
+    private Long listeningStoryId;
+
+    /** For WRITING attempts: the customer-email prompt served. Pinned and recorded as above. */
+    @Column(name = "writing_email_prompt_id")
+    private Long writingEmailPromptId;
+
+    /** For WRITING attempts: the second, non-email prompt served. Pinned and recorded as above. */
+    @Column(name = "writing_other_prompt_id")
+    private Long writingOtherPromptId;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private SessionStatus status = SessionStatus.IN_PROGRESS;

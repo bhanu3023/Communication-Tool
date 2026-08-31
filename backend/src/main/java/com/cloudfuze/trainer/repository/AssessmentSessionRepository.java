@@ -94,4 +94,34 @@ public interface AssessmentSessionRepository extends JpaRepository<AssessmentSes
     @Query("select s.speakingSetNumber, max(s.createdAt) from AssessmentSession s "
             + "where s.level = :level and s.speakingSetNumber is not null group by s.speakingSetNumber")
     List<Object[]> findSpeakingSetUsageByLevel(int level);
+
+    /** Listening stories this user has been served at one level. */
+    @Query("select distinct s.listeningStoryId from AssessmentSession s "
+            + "where s.user.id = :userId and s.level = :level and s.listeningStoryId is not null")
+    List<Long> findListeningStoriesUsedByUserAndLevel(Long userId, int level);
+
+    /** For each listening story served at one level, the most recent time it was served. */
+    @Query("select s.listeningStoryId, max(s.createdAt) from AssessmentSession s "
+            + "where s.level = :level and s.listeningStoryId is not null group by s.listeningStoryId")
+    List<Object[]> findListeningStoryUsageByLevel(int level);
+
+    /** Customer-email writing prompts this user has been served at one level. */
+    @Query("select distinct s.writingEmailPromptId from AssessmentSession s "
+            + "where s.user.id = :userId and s.level = :level and s.writingEmailPromptId is not null")
+    List<Long> findWritingEmailPromptsUsedByUserAndLevel(Long userId, int level);
+
+    /** For each customer-email prompt served at one level, the most recent time it was served. */
+    @Query("select s.writingEmailPromptId, max(s.createdAt) from AssessmentSession s "
+            + "where s.level = :level and s.writingEmailPromptId is not null group by s.writingEmailPromptId")
+    List<Object[]> findWritingEmailPromptUsageByLevel(int level);
+
+    /** Non-email writing prompts this user has been served at one level. */
+    @Query("select distinct s.writingOtherPromptId from AssessmentSession s "
+            + "where s.user.id = :userId and s.level = :level and s.writingOtherPromptId is not null")
+    List<Long> findWritingOtherPromptsUsedByUserAndLevel(Long userId, int level);
+
+    /** For each non-email prompt served at one level, the most recent time it was served. */
+    @Query("select s.writingOtherPromptId, max(s.createdAt) from AssessmentSession s "
+            + "where s.level = :level and s.writingOtherPromptId is not null group by s.writingOtherPromptId")
+    List<Object[]> findWritingOtherPromptUsageByLevel(int level);
 }

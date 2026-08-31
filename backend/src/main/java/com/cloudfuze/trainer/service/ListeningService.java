@@ -34,17 +34,17 @@ public class ListeningService {
     private static final int MIN_AUDIO_SECONDS = 45;
     private static final int MAX_AUDIO_SECONDS = 300;
 
-    private final ContentService contentService;
+    private final ContentAssignmentService contentAssignmentService;
     private final SessionService sessionService;
     private final ListeningQuestionRepository questionRepository;
     private final AiService aiService;
     private final JsonUtil json;
     private final AuditService auditService;
 
-    public ListeningService(ContentService contentService, SessionService sessionService,
+    public ListeningService(ContentAssignmentService contentAssignmentService, SessionService sessionService,
                             ListeningQuestionRepository questionRepository, AiService aiService,
                             JsonUtil json, AuditService auditService) {
-        this.contentService = contentService;
+        this.contentAssignmentService = contentAssignmentService;
         this.sessionService = sessionService;
         this.questionRepository = questionRepository;
         this.aiService = aiService;
@@ -55,7 +55,7 @@ public class ListeningService {
     @Transactional
     public ListeningDtos.StartResponse start(User user, int level) {
         AssessmentSession session = sessionService.getOrCreateActiveSection(user, Section.LISTENING, level);
-        ListeningStory story = contentService.randomStory(session.getLevel());
+        ListeningStory story = contentAssignmentService.storyForSession(user, session);
         List<ListeningQuestion> questions = questionRepository.findByStoryIdOrderByOrdinalAsc(story.getId());
 
         List<ListeningDtos.QuestionView> views = new ArrayList<>();

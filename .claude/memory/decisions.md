@@ -266,3 +266,36 @@ dependency, schema change, boundary exception, or naming/collision resolution.
   wins without the `.env` needing to be touched or even to contain the key.
 - The 4th argument is `${4:-}`, so the script still runs under `set -u` if an older workflow
   passes only three arguments. Unset variable = empty build arg = Hotjar fully off.
+
+
+### Listening and Writing content pinned per session, and Level 2 banks resized (2026-09-01)
+- **What broke:** Listening and Writing drew their content at random on *every* call to `start`,
+  recorded nothing on the session, and consulted no history. Two faults from one cause: a reload
+  mid-attempt handed the candidate different questions, and a retake could serve the same content
+  again. Level 2 made it certain rather than likely — it held **one** listening story and **two**
+  writing prompts, so every Level 2 candidate met identical content.
+- **Fix:** `ContentAssignmentService`, mirroring `SpeakingSetService` — choose once, write the
+  choice onto `AssessmentSession`, exclude what the candidate has had before, otherwise take the
+  least recently served item. `ContentService` lost its selection methods entirely (removed, not
+  deprecated, so nothing can reach for the unpinned behaviour again) and is now shared vocabulary.
+- **Sizing decision, and where it differs by section.** Speaking and Writing are sized for full
+  disjointness across a year — 201 sets, 201 email prompts, 201 non-email prompts against 200
+  expected assignments — so no two candidates need ever share. Listening is **not**: 41 stories,
+  each heard about five times a year by different people.
+- **Why the asymmetry:** a speaking set is ten sentences and a writing prompt is a paragraph;
+  a listening item is a ~300-word script plus 10 inference questions. 200 of those could not be
+  authored to the standard the existing ones set, and a large bank of weak stories is worse than
+  a smaller bank of good ones. The per-candidate guarantee — nobody repeats their own content —
+  holds in all three sections regardless, because it comes from the exclusion rule, not the size.
+- **Alternative rejected:** generating listening stories from a template with substituted names
+  and numbers. It would have reached 200 cheaply and produced 200 recognisably identical tests,
+  which defeats the purpose of not repeating.
+- **Answer keys are balanced deliberately.** The first draft of the 400 new listening questions
+  came out 69% B, so a candidate answering B throughout would have scored 69. Keys are now
+  distributed per story (no letter more than 3 times in a set of 10) and evenly across the bank.
+- **New columns are nullable:** `listening_story_id`, `writing_email_prompt_id`,
+  `writing_other_prompt_id`. `ddl-auto=update` cannot add a NOT NULL column to a populated table,
+  and attempts predating the columns legitimately have no value.
+- **Verified** by booting the backend against a throwaway Postgres: 41 Level 2 stories, 410
+  questions (every story exactly 10), 201 + 201 writing prompts, and a second boot changed no
+  counts, which is the seed-guard check.

@@ -51,6 +51,10 @@ absolute).
 - Never commit `.env` (real Azure/OpenAI/JWT values live there only); `.env.example` is placeholders.
 - Preserve the AI mock-fallback contract and the one-directional layering on every change.
 - Keep `data.sql` idempotent.
+- Seed files under `resources/seed/` only run if listed in `spring.sql.init.data-locations`,
+  and they guard on a `seed_state` marker — bump the key to push a content revision.
+- Any new content bank entry needs its selection to stay non-repeating: see
+  `ContentAssignmentService` / `SpeakingSetService` and [[decisions]] (2026-09-01).
 
 ## Suggested next steps
 1. Add the first backend test slice (scoring math + `MockAiEvaluator` + a security/role test).
