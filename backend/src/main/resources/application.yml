@@ -20,7 +20,11 @@ spring:
         format_sql: false
   sql:
     init:
-      mode: always          # runs data.sql for seed content (idempotent inserts)
+      mode: always          # runs the seed scripts below (idempotent inserts)
+      # data.sql must run FIRST: it creates seed_state, which the bank files use as their
+      # one-time guard. Naming data-locations explicitly overrides the classpath:data.sql
+      # default, so any further seed file has to be added to this list to be executed.
+      data-locations: classpath:data.sql,classpath:seed/speaking-level2-sets.sql
   # NOTE: We intentionally do NOT configure spring.security.oauth2.resourceserver here.
   # Azure ID tokens are verified on demand by AzureTokenVerifier (lazy JWKS decoder),
   # so the backend boots cleanly without a network round-trip to Azure at startup.
