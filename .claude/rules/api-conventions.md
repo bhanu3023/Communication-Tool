@@ -1,6 +1,6 @@
 # API Conventions
 
-How the AI Communication Skills Trainer structures its HTTP API. gstack `/review` and `/qa`
+How the AI Communication Trainer structures its HTTP API. gstack `/review` and `/qa`
 use these to judge API changes. These are *this project's* shapes — not generic REST advice.
 
 ## Routing & naming

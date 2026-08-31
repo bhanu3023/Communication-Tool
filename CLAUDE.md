@@ -1,4 +1,4 @@
-# AI Communication Skills Trainer — CloudFuze
+# AI Communication Trainer — CloudFuze
 
 An internal web app that lets **managers evaluate and improve their employees'
 communication skills** through AI-scored **Listening**, **Speaking**, and **Writing**

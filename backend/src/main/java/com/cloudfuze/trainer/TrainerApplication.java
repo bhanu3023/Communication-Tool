@@ -4,7 +4,7 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
 /**
- * Entry point for the AI Communication Skills Trainer backend.
+ * Entry point for the AI Communication Trainer backend.
  */
 @SpringBootApplication
 public class TrainerApplication {

@@ -18,7 +18,7 @@ public class OpenApiConfig {
     public OpenAPI trainerOpenAPI() {
         return new OpenAPI()
                 .info(new Info()
-                        .title("AI Communication Skills Trainer API")
+                        .title("AI Communication Trainer API")
                         .description("Listening, Speaking and Writing assessment platform for CloudFuze")
                         .version("1.0.0")
                         .contact(new Contact().name("CloudFuze").email("engineering@cloudfuze.com")))

@@ -1,6 +1,6 @@
 # Code Style
 
-Project-specific coding conventions for the AI Communication Skills Trainer. gstack `/review`
+Project-specific coding conventions for the AI Communication Trainer. gstack `/review`
 reads these rules. Match the surrounding code first; these codify the patterns already in use.
 
 ## Backend (Java 21 / Spring Boot 3)

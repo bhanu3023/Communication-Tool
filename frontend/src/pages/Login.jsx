@@ -65,7 +65,7 @@ export default function Login() {
           <Typography variant="h3" sx={{ fontWeight: 800, lineHeight: 1.15, mb: 2 }}>
             AI Communication
             <br />
-            Skills Trainer
+            Trainer
           </Typography>
           <Typography sx={{ maxWidth: 460, color: 'rgba(255,255,255,0.85)', fontSize: 16 }}>
             Assess and improve how your team listens, speaks, and writes — with instant,

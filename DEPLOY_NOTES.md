@@ -1,6 +1,6 @@
 # Deploy Notes
 
-Handoff checklist for deploying the AI Communication Skills Trainer after the
+Handoff checklist for deploying the AI Communication Trainer after the
 security + scoring changes. `.env` is gitignored, so environment values must be set
 per environment — they do NOT come from the repo.
 

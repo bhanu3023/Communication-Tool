@@ -1,5 +1,5 @@
 -- =====================================================================
--- Seed data for the AI Communication Skills Trainer.
+-- Seed data for the AI Communication Trainer.
 -- Idempotent: each block inserts only when its target table is empty
 -- (or the specific rows are absent), so it is safe to run on every boot.
 -- Runs after Hibernate creates the schema (defer-datasource-initialization).

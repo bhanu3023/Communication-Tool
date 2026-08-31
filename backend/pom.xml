@@ -14,7 +14,7 @@
     <groupId>com.cloudfuze</groupId>
     <artifactId>ai-comm-trainer</artifactId>
     <version>1.0.0</version>
-    <name>AI Communication Skills Trainer</name>
+    <name>AI Communication Trainer</name>
     <description>Internal communication skills assessment platform for CloudFuze</description>
 
     <properties>

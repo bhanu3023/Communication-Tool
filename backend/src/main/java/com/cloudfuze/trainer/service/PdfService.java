@@ -57,7 +57,7 @@ public class PdfService {
                 </style></head>
                 <body>
                   <h1>Communication Skills Report — Level %s</h1>
-                  <div class="brand">CloudFuze — AI Communication Skills Trainer</div>
+                  <div class="brand">CloudFuze — AI Communication Trainer</div>
                   <div class="kv"><strong>Employee:</strong> %s (%s)</div>
                   <div class="kv"><strong>Team:</strong> %s</div>
                   <div class="kv"><strong>Manager:</strong> %s</div>

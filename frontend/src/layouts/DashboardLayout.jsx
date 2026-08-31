@@ -73,7 +73,7 @@ export default function DashboardLayout({ nav = [] }) {
       >
         {!mini && (
           <Typography variant="subtitle1" sx={{ fontWeight: 700, color: 'primary.main', lineHeight: 1.2, flex: 1, mr: 1 }}>
-            AI Communication
+            AI Communication Trainer
           </Typography>
         )}
         <IconButton size="small" onClick={() => setCollapsed((c) => !c)} aria-label="Toggle sidebar">
@@ -191,8 +191,8 @@ export default function DashboardLayout({ nav = [] }) {
           <IconButton edge="start" onClick={() => setMobileOpen(true)} sx={{ mr: 1 }}>
             <MenuIcon />
           </IconButton>
-          <Typography variant="h6" sx={{ fontWeight: 700, color: 'primary.main' }}>
-            AI Communication
+          <Typography variant="h6" noWrap sx={{ fontWeight: 700, color: 'primary.main', fontSize: 17 }}>
+            AI Communication Trainer
           </Typography>
         </Toolbar>
       </AppBar>

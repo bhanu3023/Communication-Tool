@@ -1,6 +1,6 @@
 # Security Rules
 
-Security invariants for the AI Communication Skills Trainer. The `security-reviewer` agent and
+Security invariants for the AI Communication Trainer. The `security-reviewer` agent and
 gstack `/cso` enforce these. These are *this app's* rules; `/cso` adds generic coverage.
 
 ## Authentication

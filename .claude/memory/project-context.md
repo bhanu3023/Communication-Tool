@@ -1,7 +1,7 @@
 # Project Context
 
 ## What this is
-**AI Communication Skills Trainer** — an internal CloudFuze web application that helps **managers
+**AI Communication Trainer** — an internal CloudFuze web application that helps **managers
 evaluate and improve their employees' communication skills** through AI-scored assessments in three
 areas: **Listening**, **Speaking**, and **Writing**.
 
