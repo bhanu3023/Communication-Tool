@@ -489,3 +489,30 @@ dependency, schema change, boundary exception, or naming/collision resolution.
   troubleshooting, root cause, sequencing, risk triage, go or no-go, cutover coordination,
   post-migration investigation, explaining a limitation to a non-technical customer, dependency
   analysis, recommendation.
+
+
+### Level 3 content, second pass: a length ladder and no recall questions (2026-09-02)
+- **Speaking questions now climb inside a set** -- roughly two lines, two and a half, three, three
+  and a half, four (30 / 38 / 45 / 52 / 60 words). The first cut ran 56 to 100 words in no order,
+  and a candidate who meets a hundred-word scenario cold spends their opening thirty seconds
+  reading rather than thinking. Same warm-up principle as the Level 1 and Level 2 sentence sets.
+- **Trade-off recorded:** the earlier rule was two full lines of SCENARIO and then the ask, which
+  does not fit in a two-line question. Q1 and Q2 carry one tight scenario sentence plus the ask;
+  from Q3 there are two or more full lines of scenario first. The ladder wins at the short end.
+- **The listening bank had 24 questions that tested memory rather than listening** -- how many
+  documents carried labels, how long the vendor took, what an option cost. A candidate answers
+  those by holding a number for ninety seconds without following any of the reasoning. All are
+  replaced by questions on implication, trade-off, consequence or the speakers own judgement,
+  whose answers are present in the briefing but never as a sentence to recall.
+- **Two kept deliberately:** sorting a DEFERRED problem from a resolved one is comprehension, not
+  recall; and the one arithmetic item combines a figure from each of the two migrations, so it is
+  a calculation across both rather than a memory of either.
+- **Two of the replacements had to be replaced again** -- they landed next to an existing question
+  on the same point. Ten questions on one briefing only work if each opens a different door, and
+  that is easy to lose sight of when patching a bank rather than writing it.
+- **Seed markers bumped** (listening to -v3, speaking questions to -v2) with delete guards, because
+  a bank that is already seeded will not take a revision otherwise -- the row-existence guard is
+  true and the insert is skipped. This is the third time that has come up; it is the standard shape
+  for revising any seeded bank.
+- Answer keys rebalanced again after the rewrites: even across the bank, never more than three of
+  one letter in any set of ten.
