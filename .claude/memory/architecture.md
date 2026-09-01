@@ -43,10 +43,11 @@ per-level number and the gate:
 level n-1 could not have been passed without n-2 having been passed first. Adding a level means
 two constants and an entry in the two switches — nothing else in the backend is level-aware.
 
-Level 3 shipped (2026-09-02) with its content banks EMPTY on purpose. `ContentReadinessService`
-and `GET /api/employee/level-readiness?level=n` report per-section counts so a portal can say
-"questions not published yet" instead of letting a candidate spend an attempt discovering it.
-Levels 1 and 2 never call it.
+Level 3 shipped (2026-09-02) with its content banks empty and they were seeded the same day:
+16 listening briefings (160 questions), 30 speaking sets (300 sentences) and 100 writing prompts.
+`ContentReadinessService` and `GET /api/employee/level-readiness?level=n` report per-section
+counts, so a level whose questions are not written yet says so instead of letting a candidate
+spend an attempt discovering it. Levels 1 and 2 never call it.
 
 ## Content selection (no repeats)
 All three modules pick content the same way, and the choice is **pinned to the session** so a

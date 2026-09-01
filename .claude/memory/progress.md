@@ -52,8 +52,8 @@ absolute).
 - Preserve the AI mock-fallback contract and the one-directional layering on every change.
 - Keep `data.sql` idempotent.
 - Levels are data, not branches: `AttemptPolicy` (backend) and `utils/levels.js` (frontend)
-  hold every per-level number. Level 3 exists with EMPTY content banks — seed them before
-  announcing it (see [[decisions]] 2026-09-02).
+  hold every per-level number. Level 3 is seeded: 16 listening briefings, 30 speaking sets and
+  100 writing prompts, all built on two scenarios per item (see [[decisions]] 2026-09-02).
 - Seed files under `resources/seed/` only run if listed in `spring.sql.init.data-locations`,
   and they guard on a `seed_state` marker — bump the key to push a content revision.
 - Any new content bank entry needs its selection to stay non-repeating: see

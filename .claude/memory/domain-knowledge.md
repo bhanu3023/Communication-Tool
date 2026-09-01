@@ -96,11 +96,24 @@ or assessment logic.
 Writing content banks — idempotently. Exact counts evolve; do not hardcode them in tests beyond what
 a test explicitly seeds.
 
-Level 3 has NO seeded content yet — the plumbing shipped first, deliberately, and the
-questions follow. Until they do, `/employee/level-readiness?level=3` reports every section at
-zero and the portal refuses to start one. Seeding it means the same three files under
-`resources/seed/` with `level = 3` and their own `seed_state` key, plus an entry in
-`application.yml`; nothing in the code needs to change.
+**Level 3 content is built on TWO SCENARIOS per item**, which is what distinguishes it from
+Level 2 rather than mere difficulty. Every listening briefing covers two migrations running at
+once and its questions cannot be answered by following only one; every speaking set moves from
+one migration to a second and ties them together in the closing sentences; every writing prompt
+is a customer raising two issues from two different migrations in one email, so a reply that
+answers the louder one is incomplete — which is where the completeness score bites.
+
+Both Level 3 writing pools are CUSTOMER REPLIES (`Customer Email` and `Escalation Reply`), unlike
+Levels 1 and 2 where the second task is an internal document. The two pool names exist because
+`ContentAssignmentService` splits on the category to guarantee two independent draws; they are
+not two different kinds of writing.
+
+The scenarios and vocabulary come from the migration documentation tool: Message (Slack, Teams,
+Chat), Mail (Outlook, Gmail) and Content (Shared Drive, SPO, OneDrive) in their supported
+directions, with the real limits of each — guest identities issued by the destination, delegates
+needing one sign-in, labels that are not folders, links that become named members, path length,
+native-format conversion, version history, delta passes and read-only cutoffs. US project
+language throughout, and deliberately no office idiom (see the Level 2 note in [[decisions]]).
 
 The Level 2 banks live in separate files under `resources/seed/`, listed in `application.yml`
 under `spring.sql.init.data-locations` (a file not in that list is never executed):

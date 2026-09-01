@@ -406,3 +406,46 @@ dependency, schema change, boundary exception, or naming/collision resolution.
   render an authenticated page without Abhinav's session. The build passes and every JSX
   identifier in the changed files was swept against its imports (the check that would have caught
   the `BrandLogo` breakage in August), but nobody has looked at it yet.
+
+
+### Level 3 content: two scenarios per item, grounded in the migration doc tool (2026-09-02)
+- **Asked for:** Level 3 questions built on TWO scenarios rather than one, deeper migration
+  terminology than Level 2, US business English, and writing tasks that are professional replies
+  to customer mail — using the combinations in the migration documentation tool as the source.
+- **Where the domain came from.** `github.com/mosrabhuvanakruthi2-art/Doc-Tool` documents three
+  products and 20 combinations: Message (Slack, Teams, Chat), Mail (Outlook, Gmail) and Content
+  (Shared Drive, SPO, OneDrive), each with an In Scope and an Out of Scope feature list. The repo
+  carries only the combination NAMES — every feature detail lives in a MongoDB nobody exported —
+  so the scenarios here are written from the combinations plus the real platform limits, not
+  copied from that tool content.
+- **Two scenarios is the actual design, not a difficulty knob.** Each listening briefing runs two
+  migrations for one customer and the questions cannot be answered from one thread; several ask
+  which of the two an event belonged to, and one is arithmetic across both. Each speaking set
+  spends five sentences on the first migration, four on the second, and a long tenth tying them
+  together, so the candidate switches context mid-set and then holds both at once. Each writing
+  prompt is a customer raising two issues from two different migrations, so a reply that answers
+  the louder one scores badly on completeness — which is the field that already exists for it.
+- **Both writing pools are customer replies** (`Customer Email` and `Escalation Reply`), where
+  Levels 1 and 2 pair a customer email with an internal document. The second pool name exists
+  because `ContentAssignmentService` splits on category to get two independent draws; the two are
+  not different genres. The escalation pool is where the customer is unhappy, is escalating over
+  the writer head, or is asking for something that cannot be given — the writing a fresher is
+  least ready for and the writing that carries the commercial risk.
+- **Sizes:** 16 briefings with 160 questions, 30 disjoint speaking sets with 300 sentences, and
+  100 writing prompts in two pools of 50. Sized for the population that actually reaches a level
+  gated on three Level 2 passes, and extendable by adding set numbers or rows.
+- **Answer keys were rebalanced after drafting**, as at Level 2: the first draft ran 105 of 160 on
+  B. They are now even across the bank and no letter appears more than three times in any set of
+  ten.
+- **The speaking floor was raised from 10 words to 15.** Thirty sentences had come out at 10-14
+  words — set openers and the pivot into the second scenario. A ten-word sentence has no clause to
+  hold together, which is the same criticism recorded against the old Level 2 opener, so each was
+  rewritten to carry its information plus the detail the candidate must keep straight.
+- **No office idiom, deliberately** — the Level 2 entry above records why it was removed: it tested
+  vocabulary nobody had been taught. What IS used is learnable US project language named plainly in
+  context: kickoff, statement of work, change request, dry run, UAT, go-live, cutover window,
+  blackout period, punch list, hypercare, escalation path, root cause analysis, run book.
+- **Verified end to end** against a throwaway database: the banks seed to the expected counts, the
+  Level 2 banks are untouched, readiness flips to ready, and a real attempt started on all three
+  sections — listening serving a two-migration briefing with 10 questions, speaking serving a set
+  that climbs from 15 words to 77, and writing serving one prompt from each pool.
