@@ -44,7 +44,7 @@ import {
   uploadSpeakingTake,
 } from '../../services/assessmentService';
 import { useToast } from '../../contexts/ToastContext';
-import { levelRules } from '../../utils/levels';
+import { levelRules, parseLevel } from '../../utils/levels';
 
 // There is ONE text in this section, and it is the one being scored: after each take the
 // recording is uploaded and transcribed on the server, and those words are shown straight back.
@@ -55,6 +55,18 @@ import { levelRules } from '../../utils/levels';
 // whether a word was misheard, and the player read 0:00 because a webm clip carries no duration
 // metadata, which read as a broken test. Showing the graded words solves both: if a word came
 // out wrong, they can see it and re-record while it still costs them nothing.
+
+// Level 3 is a different task: a two-workstream migration scenario, and the candidate says what
+// they would do. The steps have to say so, or a candidate will sit there reading the question out.
+const ANSWER_INTRO_STEPS = [
+  { icon: HeadphonesIcon, title: 'Wear earphones', desc: 'Put on your earphones for the clearest recording.' },
+  { icon: MenuBookIcon, title: 'Read the scenario', desc: 'You get a real migration situation covering TWO workstreams, then a question about it. Read it fully before you speak.' },
+  { icon: RecordVoiceOverIcon, title: 'Answer in your own words', desc: 'There is no script and no correct wording. Say what you would do, why, and what you would tell the customer.' },
+  { icon: MicIcon, title: 'Press Record', desc: 'The microphone starts only when you press “Record answer”.' },
+  { icon: HourglassTopIcon, title: 'Wait one second', desc: 'The mic takes a moment to start. Wait until it says “Listening…”, then begin — speaking too early cuts off your first words.' },
+  { icon: ReplayIcon, title: 'Check what was heard', desc: 'Press Stop and your answer is transcribed straight away. Not right? Re-record once; the latest take is scored.' },
+  { icon: InsightsIcon, title: 'How you are scored', desc: 'On whether you answered the question — the real dependency, the risks, a clear recommendation — and on the English you said it in.' },
+];
 
 const INTRO_STEPS = [
   { icon: HeadphonesIcon, title: 'Wear earphones', desc: 'Put on your earphones for the clearest recording.' },
@@ -72,13 +84,18 @@ export default function Speaking() {
   // stays level-agnostic — the content, attempt count and pass mark all come back
   // from /start for that level.
   const [searchParams] = useSearchParams();
-  const level = Number(searchParams.get('level')) === 2 ? 2 : 1;
+  const level = parseLevel(searchParams.get('level'));
   // The pass mark differs per level (75 / 80). This screen hardcoded 75, so a Level 2
   // candidate on 77 was congratulated and then found the section still failed.
   const passMark = levelRules(level).passMark;
+  // Level 3 asks the candidate to ANSWER a scenario rather than repeat a sentence. The backend
+  // scores it differently too (AiService.scoreSpokenAnswer); this only changes what is on screen.
+  const answerMode = level >= 3;
+  const introSteps = answerMode ? ANSWER_INTRO_STEPS : INTRO_STEPS;
   // Every exit from a Level 2 test returns to the Level 2 portal, never to Level 1.
-  const homePath = level === 2 ? '/level-2' : '/dashboard';
-  const hubPath = level === 2 ? '/level-2' : '/assessment';
+  // Every exit from a test returns to that level own portal, never to Level 1.
+  const homePath = level === 1 ? '/dashboard' : `/level-${level}`;
+  const hubPath = level === 1 ? '/assessment' : `/level-${level}`;
   const { showToast } = useToast();
   // The browser's live speech recognition is GONE. It produced a second, different text from
   // the one being graded -- Chrome-only, missing the opening words, and trivially forged -- and
@@ -407,7 +424,7 @@ export default function Speaking() {
             How it works
           </Typography>
           <Grid container spacing={2}>
-            {INTRO_STEPS.map((s, i) => (
+            {introSteps.map((s, i) => (
               <Grid item xs={12} sm={6} key={s.title}>
                 <Paper
                   variant="outlined"
@@ -640,14 +657,14 @@ export default function Speaking() {
               <CardContent>
                 <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1.5 }}>
                   <Typography variant="subtitle2" color="text.secondary">
-                    Sentence {i + 1}
+                    {answerMode ? 'Question' : 'Sentence'} {i + 1}
                   </Typography>
                   <Chip size="small" color={scoreColor(ev.overall ?? 0)}
                     label={`${Math.round(ev.overall ?? 0)} / 100`} />
                 </Stack>
 
                 <Typography variant="caption" color="text.secondary">
-                  Target — what you should say
+                  {answerMode ? 'The situation — and what you are asked' : 'Target — what you should say'}
                 </Typography>
                 <Typography sx={{ mb: 0.5, fontWeight: 500 }}>“{it.expected}”</Typography>
                 {tts.supported && (
@@ -739,7 +756,7 @@ export default function Speaking() {
       <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ mb: 2 }}>
         <Paper sx={{ p: 2, flex: 1 }}>
           <Typography variant="overline" color="text.secondary">
-            Sentence {index + 1} of {sentences.length}
+            {answerMode ? 'Question' : 'Sentence'} {index + 1} of {sentences.length}
           </Typography>
           <LinearProgress
             variant="determinate"
@@ -862,10 +879,14 @@ export default function Speaking() {
                 {preparing
                   ? 'Getting the mic ready — please wait before speaking…'
                   : isRecording
-                    ? 'Recording… read the sentence aloud, then press “Stop recording”.'
+                    ? answerMode
+                      ? 'Recording… give your answer, then press “Stop recording”.'
+                      : 'Recording… read the sentence aloud, then press “Stop recording”.'
                     : recordCount > 0 || recorder.error
                       ? micProblemMessage(recorder.error)
-                      : 'Press “Record answer”, read the sentence aloud, then play it back here.'}
+                      : answerMode
+                        ? 'Take a moment to think, then press “Record answer” and give your answer aloud.'
+                        : 'Press “Record answer”, read the sentence aloud, then play it back here.'}
               </Typography>
             )}
           </Paper>

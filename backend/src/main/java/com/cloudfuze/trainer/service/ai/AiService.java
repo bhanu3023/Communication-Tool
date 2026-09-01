@@ -304,6 +304,127 @@ public class AiService {
      *
      * @param wav raw WAV bytes as stored for the sentence
      */
+    /**
+     * Scores a spoken ANSWER to a migration question, which is what Level 3 asks for.
+     *
+     * <p>Levels 1 and 2 are a repetition task: there is a target sentence and {@link
+     * #scoreSpeaking} asks how faithfully it came back. At Level 3 the candidate is given a
+     * two-workstream scenario and asked what they would do, so there is no target text to
+     * compare against and the interesting question is different: did they answer THIS question,
+     * is the migration reasoning sound, and can a customer follow it.
+     *
+     * <p>The six returned dimensions are deliberately the same ones, so the weighting in {@link
+     * #weightedOverall}, the DTO, the manager view and the feedback screen all work unchanged.
+     * What they MEAN shifts with the task, and the prompt says so explicitly:
+     * accuracy carries whether the question was answered with technically sound reasoning
+     * (it is the heaviest dimension at 30%), grammar and vocabulary carry the English as spoken,
+     * pronunciation stays intelligibility, and fluency and confidence stay neutral because a
+     * transcript cannot evidence them.
+     *
+     * <p>The evidence bar from the repetition prompt carries over: this is a transcript from a
+     * model with a measured ~13% word error rate, so a single odd word is the machine, not the
+     * speaker, and nothing about spelling or punctuation may be marked.
+     */
+    public SpeakingEvaluation scoreSpokenAnswer(String question, String transcript) {
+        if (transcript == null || transcript.isBlank()) {
+            return mock.scoreSpokenAnswer(question, transcript);
+        }
+        JsonNode node = openAi.completeJson(
+                "You are a senior migration consultant marking a spoken answer from a candidate "
+                        + "who wants to run enterprise cloud migrations. They were given a scenario "
+                        + "covering TWO migration workstreams and asked what they would do. You are "
+                        + "judging the ANSWER, not a recitation: there is no model text, and a reply "
+                        + "that is worded differently from yours can be completely right.\n"
+
+                        + "WHAT YOUR EVIDENCE IS. You did not hear the recording. You are reading an "
+                        + "automatic transcript from a model measured at about a 13% word error rate "
+                        + "on these candidates, so roughly one word in eight may be the machine and not "
+                        + "the speaker. Never mark a single odd word that could be a mishearing, and "
+                        + "never mark spelling, punctuation, capitalisation or how a word was written "
+                        + "down: the candidate was speaking. Where you genuinely cannot tell, favour "
+                        + "the candidate.\n"
+
+                        + "ACCURACY IS THE HEART OF THIS MARK AND IT MEANS THE ANSWER, NOT THE WORDS. "
+                        + "Ask: did they answer what was actually asked about BOTH workstreams; did "
+                        + "they identify the real dependency, risk or cause rather than an obvious "
+                        + "surface detail; is the migration reasoning technically sound; and would a "
+                        + "customer be able to act on what they said. An answer that is fluent, "
+                        + "confident and identifies the WRONG dependency is a weak answer and must "
+                        + "score below 60 here however well it is expressed. An answer that finds the "
+                        + "right issue in plain, slightly clumsy English is a strong one. If the "
+                        + "question asked for a recommendation and none was given, or asked which "
+                        + "risks are blockers and none were separated, that is an incomplete answer "
+                        + "whatever else it contains.\n"
+
+                        + "THE TWO WORKSTREAMS MATTER. These scenarios are built so that one migration "
+                        + "affects the other. A candidate who discusses only one of them, however well, "
+                        + "has answered half the question, and accuracy should reflect that directly.\n"
+
+                        + "GRAMMAR AND VOCABULARY are scored on the answer as spoken, read on its own "
+                        + "as though you had never seen the question. Is this grammatical, natural, "
+                        + "professional English a colleague could act on? Judge tense, articles, "
+                        + "plurals, prepositions, word order and connectives, and judge whether the "
+                        + "migration vocabulary is used CORRECTLY -- a candidate who says delta pass "
+                        + "when they mean pre-stage, or identity mapping when they mean permission "
+                        + "mapping, is using the word wrongly and vocabulary must come down for it. "
+                        + "Terminology used correctly and naturally earns the top band; terminology "
+                        + "sprinkled in without meaning does not.\n"
+
+                        + "PRONUNCIATION means intelligibility only, which is all a transcript can "
+                        + "evidence: start at 90, come down only where a run of words came back "
+                        + "garbled, and never exceed 95. FLUENCY and CONFIDENCE cannot be observed in "
+                        + "a transcript at all -- give a neutral 65 to 75 for both and never write a "
+                        + "tip claiming they hesitated, rushed or sounded nervous.\n"
+
+                        + "THE SPEAKER IS AN INDIAN ENGLISH SPEAKER EARLY IN THEIR CAREER. Indian "
+                        + "English is a standard variety, not an error. Judge whether a customer would "
+                        + "UNDERSTAND them, never how close they sound to an American speaker, and "
+                        + "never use the words accent or mother tongue.\n"
+
+                        + "BANDS for accuracy: 90-100 identifies the real dependency across both "
+                        + "workstreams, separates blockers from what can wait, and recommends "
+                        + "something defensible; 75-89 right on the main issue with a gap in the "
+                        + "reasoning or no clear recommendation; 60-74 partly right, or right about "
+                        + "one workstream only; 40-59 plausible but misses what the scenario turns "
+                        + "on; below 40 wrong, generic, or a restatement of the question.\n"
+
+                        + "RESTATING THE QUESTION IS NOT AN ANSWER. A candidate who repeats the "
+                        + "scenario back with no analysis scores below 40 on accuracy no matter how "
+                        + "fluently it is delivered.\n"
+
+                        + "NOW COACH THEM. 'mistakes' lists what was wrong, one entry each: a factual "
+                        + "or reasoning error about the migration, a term used incorrectly, or a "
+                        + "genuine grammar fault. Quote what they said, give the correction, and add a "
+                        + "SHORT plain reason -- the reason is not optional. Do not list something "
+                        + "that could be a transcription artefact. 'suggestions' gives 2 to 4 tips: "
+                        + "open with one real strength in THIS answer, quoting it; then the single "
+                        + "most important thing missing from their reasoning and how to structure it "
+                        + "next time; close with one line they could practise saying aloud in the same "
+                        + "situation. Speak to them as 'you', warmly and directly, and never restate "
+                        + "the score.\n"
+                        + "Return JSON numeric fields (0-100): pronunciation, accuracy, fluency, "
+                        + "grammar, vocabulary, confidence, plus the 'mistakes' and 'suggestions' "
+                        + "arrays.",
+                "The question they were asked:\n" + question
+                        + "\n\nWhat they said in reply (automatic transcript):\n" + transcript);
+        if (node == null) {
+            return mock.scoreSpokenAnswer(question, transcript);
+        }
+        double pronunciation = num(node, "pronunciation");
+        double accuracy = num(node, "accuracy");
+        double fluency = num(node, "fluency");
+        double confidence = num(node, "confidence");
+        // The same ceiling the repetition path applies, for the same reason: the examiner will
+        // otherwise award full marks for English on an answer whose substance was hollow.
+        double ceiling = accuracy + 25;
+        double grammar = Math.min(num(node, "grammar"), ceiling);
+        double vocabulary = Math.min(num(node, "vocabulary"), ceiling);
+        double overall = weightedOverall(pronunciation, accuracy, fluency, grammar, vocabulary, confidence);
+        return new SpeakingEvaluation(round(pronunciation), round(accuracy), round(fluency),
+                round(grammar), round(vocabulary), round(confidence), overall,
+                strings(node, "mistakes"), strings(node, "suggestions"));
+    }
+
     public Transcription transcribe(byte[] wav) {
         return openAi.transcribe(wav, null);
     }
@@ -641,10 +762,21 @@ public class AiService {
         return Math.max(0, Math.min(100, node.path(field).asDouble(0)));
     }
 
+    /**
+     * String array from the model, with blanks dropped. The examiner occasionally returns an
+     * empty entry -- an empty mistakes slot, most often -- and an empty string renders as an
+     * empty bullet on the feedback screen, which reads as a fault in the app rather than in the
+     * answer. Nothing downstream has ever wanted a blank, so it is filtered once here.
+     */
     private List<String> strings(JsonNode node, String field) {
         List<String> out = new ArrayList<>();
         JsonNode arr = node.path(field);
-        if (arr.isArray()) arr.forEach(n -> out.add(n.asText()));
+        if (arr.isArray()) {
+            arr.forEach(n -> {
+                String s = n.asText("");
+                if (!s.isBlank()) out.add(s.trim());
+            });
+        }
         return out;
     }
 

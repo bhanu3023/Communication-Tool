@@ -96,6 +96,14 @@ or assessment logic.
 Writing content banks — idempotently. Exact counts evolve; do not hardcode them in tests beyond what
 a test explicitly seeds.
 
+**Level 3 Speaking is answered, not repeated** (2026-09-02). 12 sets of 5 questions; each gives a
+two-workstream migration scenario and asks the candidate what they would do. Scored by
+`AiService.scoreSpokenAnswer` on whether they found the real dependency, separated blockers from
+what can wait, and recommended something defensible, alongside their English. Restating the
+scenario scores below 40 on accuracy by design. The mock fallback deliberately does NOT compare
+the answer with the question -- overlap would reward reading the question back -- and instead
+scores conservatively on length and says the answer needs a human look.
+
 **Level 3 content is built on TWO SCENARIOS per item**, which is what distinguishes it from
 Level 2 rather than mere difficulty. Every listening briefing covers two migrations running at
 once and its questions cannot be answered by following only one; every speaking set moves from

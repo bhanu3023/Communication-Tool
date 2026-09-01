@@ -63,6 +63,15 @@ its two tasks from two pools independently — a `Customer Email` prompt and a n
 
 ## Scoring (see [[domain-knowledge]])
 - Listening: MCQ, 10/correct (max 100), deterministic AI summary.
+- Speaking is TWO different assessments behind one section. Levels 1-2 are a repetition task: a
+  sentence appears, the candidate reads it aloud, `AiService.scoreSpeaking` compares the transcript
+  with it. **Level 3 is a spoken-ANSWER task** (2026-09-02): a two-workstream scenario appears with
+  a question, the candidate answers in their own words, and `AiService.scoreSpokenAnswer` judges the
+  answer -- the dependency found, blockers separated, a recommendation given -- with no model text
+  to compare against. `SpeakingService` picks the path on the session level, and the same six
+  dimensions come back either way so the weighting, DTO, manager view and feedback screen are
+  untouched. What they MEAN shifts: accuracy carries the answer at Level 3, the echo at Levels 1-2.
+  Level 3 also gets 25 minutes rather than 15, and 5 questions per set rather than 10 sentences.
 - Speaking: weighted rubric acc .30 / gram .22 / vocab .18 / pron .20 / flu .05 / conf .05; section
   = average. (The old acc 60 / gram 15 / vocab 15 / pron 5 / flu 3 / conf 2 split measured recall,
   not English, and was replaced when the Level 2 sentences grew past 50 words.)

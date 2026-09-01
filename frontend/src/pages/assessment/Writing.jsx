@@ -27,7 +27,7 @@ import ExamWarningDialog from '../../components/ExamWarningDialog';
 import ScoringScreen from '../../components/ScoringScreen';
 import { recordViolation, saveDraft, startWriting, submitWriting } from '../../services/assessmentService';
 import { useToast } from '../../contexts/ToastContext';
-import { levelRules } from '../../utils/levels';
+import { levelRules, parseLevel } from '../../utils/levels';
 
 /** Builds a fill-in skeleton from the outline: each point becomes a line to complete. */
 function buildTemplate(prompt) {
@@ -42,13 +42,14 @@ export default function Writing() {
   // stays level-agnostic — the content, attempt count and pass mark all come back
   // from /start for that level.
   const [searchParams] = useSearchParams();
-  const level = Number(searchParams.get('level')) === 2 ? 2 : 1;
+  const level = parseLevel(searchParams.get('level'));
   // The pass mark differs per level (75 / 80). This screen hardcoded 75, so a Level 2
   // candidate on 77 was congratulated and then found the section still failed.
   const passMark = levelRules(level).passMark;
   // Every exit from a Level 2 test returns to the Level 2 portal, never to Level 1.
-  const homePath = level === 2 ? '/level-2' : '/dashboard';
-  const hubPath = level === 2 ? '/level-2' : '/assessment';
+  // Every exit from a test returns to that level own portal, never to Level 1.
+  const homePath = level === 1 ? '/dashboard' : `/level-${level}`;
+  const hubPath = level === 1 ? '/assessment' : `/level-${level}`;
   const { showToast } = useToast();
 
   const [phase, setPhase] = useState('intro'); // intro | thinking | writing | result

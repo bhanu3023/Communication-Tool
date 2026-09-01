@@ -449,3 +449,43 @@ dependency, schema change, boundary exception, or naming/collision resolution.
   Level 2 banks are untouched, readiness flips to ready, and a real attempt started on all three
   sections — listening serving a two-migration briefing with 10 questions, speaking serving a set
   that climbs from 15 words to 77, and writing serving one prompt from each pool.
+
+
+### Level 3 Speaking becomes a spoken-ANSWER test (2026-09-02)
+- **Asked for:** Level 3 speaking questions built on two connected migration workstreams, deep
+  enough that terminology alone cannot answer them, with the candidate reasoning aloud.
+- **The conflict that had to be surfaced first.** Speaking was a REPETITION task at every level: a
+  sentence appears, the candidate reads it, and the score comes from comparing the transcript with
+  that sentence. An analytical question has no target text, so seeding those questions into the
+  existing pipeline would have shown a 120-word scenario and scored the candidate on how exactly
+  they read it aloud. The questions would have been good and the scores meaningless. Abhinav
+  confirmed the intent: the recording is listened to by the AI, which returns feedback and
+  mistakes -- an answer test.
+- **What changed, and what deliberately did not.** `AiService.scoreSpokenAnswer` is a second
+  scoring path, given the QUESTION rather than a target sentence, and told to judge whether the
+  answer answers it with sound migration reasoning. `SpeakingService` picks the path on the
+  session level, so Levels 1 and 2 keep the repetition prompt, the 15-minute clock and their
+  banks exactly as they are. The same six dimensions come back from both paths, so the weighting,
+  the DTO, the manager view and the feedback screen needed no change at all -- only what the
+  dimensions MEAN shifts, and the prompt says so: accuracy carries the answer rather than the echo.
+- **The mock fallback needed its own path, and this matters.** The repetition fallback scores word
+  overlap with the target. Reusing it here would have scored a candidate who simply read the
+  question back as a perfect answer. `MockAiEvaluator.scoreSpokenAnswer` therefore does not compare
+  at all: it scores conservatively on length, says plainly that automatic scoring was unavailable,
+  and leaves the answer for a human.
+- **Five questions per set, not ten, and 25 minutes rather than 15.** An analytical answer runs one
+  to two minutes; ten would have made a fifty-minute section.
+- **Verified by scoring two real answers to the same question** through the whole pipeline: an
+  answer that restates the scenario scored 30 on accuracy, and one that names the dependency,
+  proposes a measurement and gives a recommendation scored 90. The section can therefore tell them
+  apart, which is the entire point of the level.
+- **Also fixed here:** `strings()` now drops blank entries from any model array. The examiner
+  occasionally returned an empty mistakes slot, which rendered as an empty bullet and read as a
+  fault in the app rather than in the answer.
+- **Question design rules**, applied to all 60: two connected workstreams in every one, at least
+  two sentences of concrete scenario before the ask, the cause never stated in the question, no
+  pairing of platforms used twice, and the failure patterns rotated so path length, external
+  identity and permissions each appear once or twice rather than everywhere. Types are mixed --
+  troubleshooting, root cause, sequencing, risk triage, go or no-go, cutover coordination,
+  post-migration investigation, explaining a limitation to a non-technical customer, dependency
+  analysis, recommendation.

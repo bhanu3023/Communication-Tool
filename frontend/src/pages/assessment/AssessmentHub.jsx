@@ -8,7 +8,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import Level2Gate from '../../components/Level2Gate';
 import { getSections, requestAttempt } from '../../services/assessmentService';
 import { useToast } from '../../contexts/ToastContext';
-import { levelTheme, rulesSummary } from '../../utils/levels';
+import { levelTheme, parseLevel, rulesSummary } from '../../utils/levels';
 
 // Per-level briefs. The sections are the same three at both levels; what changes is
 // how demanding the content is, which is what the copy has to convey.
@@ -58,8 +58,7 @@ export default function AssessmentHub() {
   const { showToast } = useToast();
   const [searchParams] = useSearchParams();
   // Anything outside the levels we know about falls back to Level 1 rather than 404ing.
-  const requested = Number(searchParams.get('level'));
-  const level = requested === 2 || requested === 3 ? requested : 1;
+  const level = parseLevel(searchParams.get('level'));
   const [cards, setCards] = useState(null);
   const [level1Cards, setLevel1Cards] = useState(null);
   const [requesting, setRequesting] = useState(false);
@@ -176,7 +175,7 @@ export default function AssessmentHub() {
       )}
 
       <Button variant="text" size="large" sx={{ mt: 3 }} onClick={() => navigate(homePath)}>
-        {level === 2 ? 'Back to Level 2' : 'Back to Dashboard'}
+        {level === 1 ? 'Back to Dashboard' : `Back to Level ${level}`}
       </Button>
     </Box>
   );

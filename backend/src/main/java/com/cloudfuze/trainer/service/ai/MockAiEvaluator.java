@@ -58,6 +58,37 @@ public class MockAiEvaluator {
                 round(grammar), round(vocabulary), round(confidence), overall, List.of(), suggestions);
     }
 
+    /**
+     * Deterministic fallback for a spoken ANSWER, used when OpenAI is unavailable.
+     *
+     * <p>It cannot judge whether an answer is right, and it deliberately does not try. The
+     * repetition fallback scores word overlap with the target, and doing that here would be
+     * actively harmful: the "target" is the question, so a candidate who simply read the
+     * question back would score highest. Length is the only honest signal available -- an
+     * answer of a few words cannot have addressed two workstreams -- so it scores conservatively
+     * and says plainly that the answer needs a human look.
+     */
+    public SpeakingEvaluation scoreSpokenAnswer(String question, String transcript) {
+        String said = transcript == null ? "" : transcript.trim();
+        if (said.isBlank()) {
+            return new SpeakingEvaluation(0, 0, 0, 0, 0, 0, 0, List.of(),
+                    List.of("No speech was detected. Press Record and answer the question aloud."));
+        }
+        int words = tokens(said).size();
+        // A two-workstream answer runs well past 60 words; below that it cannot be complete.
+        double coverage = words >= 120 ? 70 : words >= 60 ? 55 : words >= 25 ? 40 : 20;
+        double overall = AiService.weightedOverall(70, coverage, 70, coverage, coverage, 70);
+        List<String> tips = new ArrayList<>();
+        tips.add("Automatic scoring was unavailable for this answer, so this score is provisional "
+                + "and your answer has been kept for review.");
+        if (words < 60) {
+            tips.add("Your answer was short. These questions cover two migrations at once, so say "
+                    + "something about each one and finish with what you would recommend.");
+        }
+        return new SpeakingEvaluation(70, round(coverage), 70, round(coverage), round(coverage), 70,
+                overall, List.of(), tips);
+    }
+
     public WritingEvaluation scoreWriting(String category, String prompt, String content) {
         String text = content == null ? "" : content.trim();
         int words = text.isBlank() ? 0 : text.split("\\s+").length;

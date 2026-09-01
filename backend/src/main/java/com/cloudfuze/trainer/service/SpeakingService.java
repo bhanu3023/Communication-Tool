@@ -33,6 +33,16 @@ public class SpeakingService {
     // Ten minutes would have turned a content change into a time trial.
     private static final int OVERALL_SECONDS = 900;   // 15 minutes total
     private static final int QUESTION_SECONDS = 60;   // advisory only; the UI runs no per-sentence timer
+
+    /**
+     * Level 3 is not a repetition task. The candidate is given a two-workstream scenario and
+     * asked what they would do, which means reading the scenario, thinking, and then speaking
+     * for a minute or two -- five times over. Fifteen minutes would make it a typing-speed test
+     * for the mouth. Twenty-five gives roughly two minutes of thinking and answering per
+     * question with room to re-record one.
+     */
+    private static final int OVERALL_SECONDS_LEVEL_3 = 1500;  // 25 minutes total
+    private static final int QUESTION_SECONDS_LEVEL_3 = 180;  // advisory only, as above
     /** A bare WAV header is 44 bytes, so anything this small carries no audio at all. */
     private static final int EMPTY_AUDIO_BYTES = 44;
 
@@ -76,13 +86,16 @@ public class SpeakingService {
      *
      * @param index zero-based position of this sentence, which is how the stored take is found
      */
-    private SpeakingDtos.SpeechItem scoreSentence(Long sessionId, int index,
+    private SpeakingDtos.SpeechItem scoreSentence(Long sessionId, int level, int index,
                                                   SpeakingDtos.SpeechResultInput input) {
         // Never trust the client's "expected" text — resolve the reference sentence from the
         // database by id, so a caller cannot send expected == transcript for a perfect score.
         String expected = sentenceRepository.findById(input.sentenceId())
                 .map(SpeakingSentence::getText)
                 .orElse("");
+        // At Level 3 that text is a QUESTION rather than a sentence to repeat, so the answer is
+        // judged against it instead of compared with it. See AiService.scoreSpokenAnswer.
+        boolean answerMode = level >= AttemptPolicy.LEVEL_THREE;
 
         SpeakingRecording stored = recordingRepository
                 .findBySessionIdAndSentenceIndex(sessionId, index)
@@ -90,7 +103,9 @@ public class SpeakingService {
         if (stored == null || stored.getAudio() == null || stored.getAudio().length <= EMPTY_AUDIO_BYTES) {
             // No usable recording reached us for this sentence. That is an unanswered question,
             // not an outage: score it as nothing said.
-            SpeakingEvaluation none = aiService.scoreSpeaking(expected, "");
+            SpeakingEvaluation none = answerMode
+                    ? aiService.scoreSpokenAnswer(expected, "")
+                    : aiService.scoreSpeaking(expected, "");
             return new SpeakingDtos.SpeechItem(expected, "", none, false, false);
         }
 
@@ -112,7 +127,9 @@ public class SpeakingService {
             }
         }
 
-        SpeakingEvaluation eval = aiService.scoreSpeaking(expected, transcript);
+        SpeakingEvaluation eval = answerMode
+                ? aiService.scoreSpokenAnswer(expected, transcript)
+                : aiService.scoreSpeaking(expected, transcript);
         String shown = transcriptionFailed ? "" : transcript;
         return new SpeakingDtos.SpeechItem(expected, shown, eval, true, transcriptionFailed);
     }
@@ -196,8 +213,11 @@ public class SpeakingService {
             views.add(new SpeakingDtos.SentenceView(s.getId(), i++, s.getText()));
         }
         auditService.log(user.getEmail(), "SPEAKING_START", "session=" + session.getId());
+        boolean answerMode = level >= AttemptPolicy.LEVEL_THREE;
         return new SpeakingDtos.StartResponse(
-                session.getId(), session.getAttemptNumber(), OVERALL_SECONDS, QUESTION_SECONDS, views);
+                session.getId(), session.getAttemptNumber(),
+                answerMode ? OVERALL_SECONDS_LEVEL_3 : OVERALL_SECONDS,
+                answerMode ? QUESTION_SECONDS_LEVEL_3 : QUESTION_SECONDS, views);
     }
 
     @Transactional
@@ -214,7 +234,7 @@ public class SpeakingService {
             // already on disk. It also means a submit no longer carries several megabytes of
             // audio, which is what used to make it the slowest, most failure-prone request in
             // the app.
-            items.add(scoreSentence(session.getId(), index, input));
+            items.add(scoreSentence(session.getId(), session.getLevel(), index, input));
             index++;
         }
         double total = items.stream().mapToDouble(it -> it.evaluation().overall()).sum();

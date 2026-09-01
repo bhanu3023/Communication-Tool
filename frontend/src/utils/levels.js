@@ -152,6 +152,19 @@ export const isLevelComplete = (cards) => passedCount(cards) === SECTION_CODES.l
 /** Which level must be completed to open this one (Level 1 opens on nothing). */
 export const gatingLevel = (level) => Math.max(1, level - 1);
 
+/**
+ * A level read from a URL, query string or stored value, clamped to a level that exists.
+ *
+ * Every page that took `?level=` used to inline `Number(x) === 2 ? 2 : 1`, which silently
+ * collapsed Level 3 to Level 1 -- so the Level 3 portal linked correctly to a test page that
+ * then loaded the Level 1 questions. One helper means a fourth level needs no edit at the
+ * call sites, and no call site can disagree with another about what is valid.
+ */
+export const parseLevel = (value, fallback = 1) => {
+  const n = Number(value);
+  return Number.isInteger(n) && n >= 1 && n <= MAX_LEVEL ? n : fallback;
+};
+
 // --- one-time unlock celebration -------------------------------------------------
 // The "Level 2 unlocked" moment is what makes the progression feel earned, so it must
 // fire once and never again. Until the backend can say "this is new", remember locally.

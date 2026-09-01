@@ -22,7 +22,7 @@ import GroupWorkIcon from '@mui/icons-material/GroupWorkOutlined';
 import LoadingScreen from '../../components/LoadingScreen';
 import { getTeam, getTeams } from '../../services/assessmentService';
 import LevelTabs from '../../components/LevelTabs';
-import { levelTheme, rulesSummary } from '../../utils/levels';
+import { levelTheme, parseLevel, rulesSummary } from '../../utils/levels';
 import { useToast } from '../../contexts/ToastContext';
 
 const initialsOf = (name) =>
@@ -50,7 +50,7 @@ export default function ManagerDashboard() {
   const search = searchParams.get('q') || '';
   const status = searchParams.get('status') || 'all'; // 'all' | 'attempted' | 'not_attempted'
   const team = searchParams.get('team') || '';        // '' = all teams
-  const level = Number(searchParams.get('level')) === 2 ? 2 : 1;
+  const level = parseLevel(searchParams.get('level'));
 
   // replace: true -- otherwise every keystroke in the search box pushes a history entry and the
   // browser's Back button walks letter by letter instead of leaving the page.
