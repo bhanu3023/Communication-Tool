@@ -117,10 +117,13 @@ public class DashboardService {
     public DashboardDtos.EmployeeDashboard employeeDashboard(User user, int level, boolean includeAi) {
         AttemptPolicy.requireValidLevel(level);
         boolean unlocked = attemptPolicy.levelUnlocked(user.getId(), level);
-        // At Level 2 the level gate IS the Level 2 gate — don't ask the same question twice.
-        boolean nextUnlocked = level == AttemptPolicy.LEVEL_TWO
+        // Is the level ABOVE this one open? That drives the unlock moment on the portal below
+        // it. At the top level there is nothing above, so the answer is this level's own gate
+        // rather than a question about a level that does not exist — which is also exactly what
+        // this returned for Level 2 before Level 3 was added.
+        boolean nextUnlocked = level >= AttemptPolicy.MAX_LEVEL
                 ? unlocked
-                : attemptPolicy.levelUnlocked(user.getId(), AttemptPolicy.LEVEL_TWO);
+                : attemptPolicy.levelUnlocked(user.getId(), level + 1);
 
         // Flat history for THIS level across sections, newest first, with per-section improvement.
         List<DashboardDtos.SectionCard> cards = new ArrayList<>();

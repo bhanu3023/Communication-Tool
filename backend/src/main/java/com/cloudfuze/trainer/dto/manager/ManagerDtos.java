@@ -22,6 +22,7 @@ public final class ManagerDtos {
             String team,
             int level,               // which level these scores belong to
             boolean level2Unlocked,  // has this employee passed all three Level 1 sections?
+            boolean levelUnlocked,   // is THIS row's level open for them? (always true at Level 1)
             Double listeningScore,
             Double speakingScore,
             Double writingScore,
@@ -100,6 +101,7 @@ public final class ManagerDtos {
             String manager,
             int level,               // the level these sections/feedback describe
             boolean level2Unlocked,  // has this employee passed all three Level 1 sections?
+            boolean level3Unlocked,  // ...and all three Level 2 sections?
             List<DashboardDtos.SectionCard> sections,
             List<WarningRow> warnings,
             DashboardDtos.AiFeedback aiFeedback,

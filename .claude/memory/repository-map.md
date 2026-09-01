@@ -23,6 +23,9 @@ docs/ARCHITECTURE.md
 | Sessions/scoring | `entity/AssessmentSession`, `entity/SectionResult`; `service/SessionService`, `service/AttemptService`, `service/AttemptPolicy`, `entity/SectionAttemptControl`; `service/AttemptDetailService` |
 | Manager/reporting | `controller/ManagerController` → `service/ManagerService`; `service/PdfService`; `service/DashboardService`; `entity/ManagerComment` |
 | Proctoring | `controller/ProctorController` → `service/ProctorService`; `entity/ProctorEvent` |
+| Level portals (frontend) | `pages/employee/Dashboard.jsx` (L1), `Level2.jsx`, `Level3.jsx` — L1/L2 share the hero+tiles blocks, L3 is a console layout of its own |
+| Level rules | `service/AttemptPolicy.java` (pass marks, attempts, the gate) + `utils/levels.js` (copy, accents, nav) — keep the two in step |
+| Content readiness | `service/ContentReadinessService.java` → `GET /api/employee/level-readiness` |
 | Content banks | `entity/{ListeningQuestion,ListeningStory,SpeakingSentence,SpeakingRecording,WritingPrompt}`; `service/ContentService` (shared vocabulary only); selection lives in `service/SpeakingSetService` + `service/ContentAssignmentService`; matching `repository/*` |
 | Core entities | `entity/{User,Department,Team,Notification,AuditLog,BaseEntity}` |
 | DTOs (records) | `dto/<module>/<Module>Dtos.java` (auth, dashboard, listening, speaking, writing, manager, proctor) + top-level `SectionScoreResponse`, `ProfileDto`, `AttemptDetail`, `SectionScoreResponse` |

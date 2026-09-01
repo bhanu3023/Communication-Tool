@@ -22,7 +22,11 @@ export const SECTION_CODES = ['LISTENING', 'SPEAKING', 'WRITING'];
 export const LEVEL_RULES = {
   1: { attempts: 2, passMark: PASS_MARK },
   2: { attempts: 2, passMark: 80 },
+  3: { attempts: 2, passMark: 85 },
 };
+
+/** The highest level the app knows about. Mirrors AttemptPolicy.MAX_LEVEL. */
+export const MAX_LEVEL = 3;
 
 export const levelRules = (level) => LEVEL_RULES[level] || LEVEL_RULES[1];
 
@@ -33,10 +37,17 @@ export const rulesSummary = (level) => {
 };
 
 /**
- * Per-level visual identity. Both levels share the SAME layout — hero, three section
- * tiles, attempt history — so only the accent changes. That is deliberate: identical
- * structure keeps the app learnable, while a different accent (indigo -> teal) plus
- * the level badge makes it immediately obvious which level you are standing in.
+ * Per-level visual identity.
+ *
+ * Levels 1 and 2 share the SAME layout — hero, three section tiles, attempt history — so only
+ * the accent changes between them. That is deliberate: identical structure keeps the app
+ * learnable, while a different accent (indigo -> teal) plus the level badge makes it obvious
+ * which level you are standing in.
+ *
+ * Level 3 deliberately breaks that pattern. It is the top of the ladder and it is laid out as a
+ * console rather than a set of tiles (see Level3.jsx), so arriving there should FEEL like arriving
+ * somewhere. Its accent is the true CloudFuze brand blue — the one place in the product where the
+ * brand colour itself is the reward.
  */
 export const LEVEL_THEME = {
   1: {
@@ -54,6 +65,19 @@ export const LEVEL_THEME = {
     hero: 'linear-gradient(120deg, #06323a 0%, #0b5c66 55%, #00acc1 100%)',
     heroText: '#ffffff',
     onAccent: '#fff',
+  },
+  3: {
+    label: 'Level 3',
+    tagline: 'Mastery',
+    accent: '#0129AC',
+    // Deeper and cooler than Level 2's teal, ending on the brand blue rather than passing
+    // through it, so the two never read as the same portal at a glance.
+    hero: 'linear-gradient(125deg, #050c2e 0%, #0a1b6b 52%, #0129AC 100%)',
+    heroText: '#ffffff',
+    onAccent: '#fff',
+    // Level 3 only: a soft wash for panel backgrounds that keeps text at AA contrast.
+    wash: '#f2f5ff',
+    line: 'rgba(1,41,172,0.16)',
   },
 };
 
@@ -74,10 +98,11 @@ export const LOCKED_THEME = {
 
 export const levelTheme = (level) => LEVEL_THEME[level] || LEVEL_THEME[1];
 
-/** The two level portals, for the hero pills and the sidebar. */
+/** The level portals, for the hero pills and the sidebar. */
 export const LEVELS_NAV = [
   { n: 1, label: 'Level 1', path: '/dashboard' },
   { n: 2, label: 'Level 2', path: '/level-2' },
+  { n: 3, label: 'Level 3', path: '/level-3' },
 ];
 
 export const sectionTitle = (code) => code.charAt(0) + code.slice(1).toLowerCase();
@@ -114,6 +139,18 @@ export const passedCount = (cards) => gateProgress(cards).filter((p) => p.passed
 
 /** The gate itself: all three Level 1 sections passed. */
 export const isLevel1Complete = (cards) => passedCount(cards) === SECTION_CODES.length;
+
+/**
+ * The same question for any level: are all three sections of THESE cards passed? A level opens
+ * when the level below it is complete, so pass the cards of the level below.
+ *
+ * `isLevel1Complete` is kept as its own export rather than replaced — it is called from four
+ * Level 1/2 places that have no reason to change, and its name says what those places mean.
+ */
+export const isLevelComplete = (cards) => passedCount(cards) === SECTION_CODES.length;
+
+/** Which level must be completed to open this one (Level 1 opens on nothing). */
+export const gatingLevel = (level) => Math.max(1, level - 1);
 
 // --- one-time unlock celebration -------------------------------------------------
 // The "Level 2 unlocked" moment is what makes the progression feel earned, so it must

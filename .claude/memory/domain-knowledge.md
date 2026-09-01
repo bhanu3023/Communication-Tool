@@ -96,6 +96,12 @@ or assessment logic.
 Writing content banks — idempotently. Exact counts evolve; do not hardcode them in tests beyond what
 a test explicitly seeds.
 
+Level 3 has NO seeded content yet — the plumbing shipped first, deliberately, and the
+questions follow. Until they do, `/employee/level-readiness?level=3` reports every section at
+zero and the portal refuses to start one. Seeding it means the same three files under
+`resources/seed/` with `level = 3` and their own `seed_state` key, plus an entry in
+`application.yml`; nothing in the code needs to change.
+
 The Level 2 banks live in separate files under `resources/seed/`, listed in `application.yml`
 under `spring.sql.init.data-locations` (a file not in that list is never executed):
 `speaking-level2-sets.sql`, `listening-level2-stories.sql`, `writing-level2-prompts.sql`. They

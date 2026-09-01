@@ -22,6 +22,15 @@ use these to judge API changes. These are *this project's* shapes — not generi
 - **Binary responses** (PDF report, speaking recording) return `ResponseEntity<byte[]>` with an
   explicit `Content-Type` (`application/pdf`, `audio/wav`) and appropriate `CacheControl`.
 
+## Levels on the wire
+
+- Every assessment endpoint takes `?level=` (default 1) and every level-scoped response carries
+  the level it describes. Valid values are 1-3; `AttemptPolicy.requireValidLevel` rejects the rest.
+- A locked level is a **403** carrying the sentence a candidate should read, from
+  `AttemptPolicy.lockedMessage`. A level whose content is not seeded yet is a **404** from the
+  content selector — ask `GET /api/employee/level-readiness?level=n` first if you intend to offer
+  a Start button.
+
 ## Errors
 
 - All errors flow through `GlobalExceptionHandler` (`@RestControllerAdvice`) and return the

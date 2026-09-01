@@ -369,3 +369,40 @@ dependency, schema change, boundary exception, or naming/collision resolution.
 - **Level 2 could not be exercised through the app**: it is gated behind a best score of 75 in all
   three Level 1 sections, so the new Level 2 banks were verified by seeding and by direct prompt
   runs, not by an attempt.
+
+
+### Level 3 shipped as plumbing first, with a UI that is not Level 2's (2026-09-02)
+- **Asked for:** Level 3 at code level, in both portals, with a better UI than Level 2 and no
+  reuse of the templates already in the app — and, explicitly, no change to Level 1 or Level 2,
+  which are working in production. Questions to follow later.
+- **Rules chosen with Abhinav:** pass mark 85, 2 attempts per section, and Level 3 opens when all
+  three Level 2 sections are passed — the same shape as the Level 1 -> Level 2 gate.
+- **The gate was generalised rather than special-cased.** `levelUnlocked` now checks the level
+  directly below instead of hard-coding Level 1, and `lockedMessage` names that level and its
+  pass mark. For Level 2 both produce byte-identical results, including the sentence a candidate
+  reads on a locked portal — that wording is load bearing and is asserted in the verification run.
+- **`nextLevelUnlocked` now means "the level above this one"**, which is what its name always
+  said. At Level 1 that is unchanged; at Level 2 nothing consumes it, so nothing moved.
+- **Content ships separately, and the app says so.** Level 3 has no seeded questions yet, so
+  `ContentReadinessService` + `GET /employee/level-readiness` report per-section counts and the
+  portal disables Start with "questions not published yet". Without it the first candidate to
+  reach Level 3 would spend an attempt to discover a 404 from the content selector. Levels 1 and
+  2 never call it, so their paths carry no extra query.
+- **The Level 3 UI deliberately shares no component with Level 2.** Levels 1 and 2 are hero +
+  three tiles + history table; Level 3 is a console — a command bar that always states where you
+  stand and what to do next, a rail of the three sections, and one detail panel with room for
+  numbers a tile could not hold. Reasoning: three equal tiles say "here are three things", but at
+  the top level the useful question is "what do I do next and how close am I", which is a focus
+  problem rather than a grid problem.
+- **Its accent is the true CloudFuze blue (#0129AC)** — see [[cloudfuze-brand]]. The app theme is
+  still the off-brand indigo and was NOT touched, because that would restyle every Level 1 and 2
+  screen. Level 3 is the one surface wearing the real brand colour, which also makes the top of
+  the ladder the only place the brand colour is the reward.
+- **Verified against a running backend**, 27 checks: Level 3 exists, is gated, reports zero
+  content, and opens once three Level 2 passes are simulated; Level 1 and Level 2 keep their
+  pass marks, attempt counts, gate behaviour and exact locked-message wording; the manager team
+  and detail endpoints answer at level 3 with the new fields and the old ones intact.
+- **Not verified: the Level 3 screen in a browser.** Sign-in is Azure-only, so there is no way to
+  render an authenticated page without Abhinav's session. The build passes and every JSX
+  identifier in the changed files was swept against its imports (the check that would have caught
+  the `BrandLogo` breakage in August), but nobody has looked at it yet.

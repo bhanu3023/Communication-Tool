@@ -6,6 +6,7 @@ import com.cloudfuze.trainer.dto.dashboard.DashboardDtos;
 import com.cloudfuze.trainer.security.CurrentUser;
 import com.cloudfuze.trainer.service.AttemptDetailService;
 import com.cloudfuze.trainer.service.AttemptService;
+import com.cloudfuze.trainer.service.ContentReadinessService;
 import com.cloudfuze.trainer.service.DashboardService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -25,13 +26,16 @@ public class EmployeeController {
     private final DashboardService dashboardService;
     private final AttemptDetailService attemptDetailService;
     private final AttemptService attemptService;
+    private final ContentReadinessService contentReadinessService;
     private final CurrentUser currentUser;
 
     public EmployeeController(DashboardService dashboardService, AttemptDetailService attemptDetailService,
-                             AttemptService attemptService, CurrentUser currentUser) {
+                             AttemptService attemptService, ContentReadinessService contentReadinessService,
+                             CurrentUser currentUser) {
         this.dashboardService = dashboardService;
         this.attemptDetailService = attemptDetailService;
         this.attemptService = attemptService;
+        this.contentReadinessService = contentReadinessService;
         this.currentUser = currentUser;
     }
 
@@ -55,6 +59,14 @@ public class EmployeeController {
     @GetMapping("/sections")
     public List<DashboardDtos.SectionCard> sections(@RequestParam(defaultValue = "1") int level) {
         return dashboardService.sectionCards(currentUser.user(), level);
+    }
+
+    @Operation(summary = "Whether a level has questions seeded yet, per section. A level portal "
+            + "calls this so it can say so up front, rather than letting a candidate meet an empty "
+            + "bank mid-test having already spent an attempt to get there.")
+    @GetMapping("/level-readiness")
+    public DashboardDtos.LevelReadiness levelReadiness(@RequestParam(defaultValue = "1") int level) {
+        return contentReadinessService.readiness(level);
     }
 
     @Operation(summary = "Completed attempts with full per-section feedback; omit level for all levels")

@@ -127,6 +127,9 @@ function SectionFeedback({ meta, attempts }) {
 export default function Feedback() {
   const [attempts, setAttempts] = useState([]);
   const [cards, setCards] = useState(null);
+  // Level 2 sections, fetched only if the Level 3 tab is opened — they are what explains the
+  // Level 3 gate, exactly as `cards` (Level 1) explains the Level 2 one.
+  const [belowCards, setBelowCards] = useState(null);
   const [level, setLevel] = useState(1);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
@@ -144,12 +147,20 @@ export default function Feedback() {
       .finally(() => setLoading(false));
   }, [showToast]);
 
+  useEffect(() => {
+    if (level === 3 && belowCards === null) {
+      getSections(2).then(setBelowCards).catch(() => setBelowCards([]));
+    }
+  }, [level, belowCards]);
+
   if (loading) return <LoadingScreen />;
 
   // Each attempt now carries its own level, so the tabs simply filter on it.
   const atLevel = attempts.filter((a) => (a.level ?? 1) === level);
   const hasAny = atLevel.length > 0;
-  const level2Open = isLevel1Complete(cards);
+  // The gate for the tab being viewed: Level 2 opens on Level 1 results, Level 3 on Level 2.
+  const gateCards = level === 3 ? belowCards : cards;
+  const levelOpen = isLevel1Complete(gateCards);
 
   return (
     <Box>
@@ -163,8 +174,8 @@ export default function Feedback() {
 
       <LevelTabs value={level} onChange={setLevel} cards={cards} sx={{ mb: 3 }} />
 
-      {level === 2 && hasAny && (
-        <Fade in timeout={260} key="level2-attempts">
+      {level >= 2 && hasAny && (
+        <Fade in timeout={260} key={`level${level}-attempts`}>
           <Stack spacing={3}>
             {SECTIONS.map((s) => (
               <SectionFeedback key={s.code} meta={s} attempts={atLevel.filter((a) => a.section === s.code)} />
@@ -173,18 +184,19 @@ export default function Feedback() {
         </Fade>
       )}
 
-      {level === 2 && !hasAny && (
-        <Fade in timeout={260} key="level2">
+      {level >= 2 && !hasAny && (
+        <Fade in timeout={260} key={`level${level}`}>
           <Box>
-            {level2Open ? (
+            {levelOpen ? (
               <Level2Empty
-                title="No Level 2 feedback yet"
-                body={`Your Level 2 portal is open (${rulesSummary(2)}). Complete a Level 2 test and its attempt-by-attempt breakdown will appear here, exactly like Level 1 — with each attempt marked against ${levelRules(2).passMark}.`}
+                title={`No Level ${level} feedback yet`}
+                body={`Your Level ${level} portal is open (${rulesSummary(level)}). Complete a Level ${level} test and its attempt-by-attempt breakdown will appear here, exactly like Level 1 — with each attempt marked against ${levelRules(level).passMark}.`}
               />
             ) : (
               <Level2Gate
-                cards={cards}
-                blurb={`Level 2 feedback appears here once the portal is open. Every Level 1 section needs a passing best score first — only your best attempt counts. Level 2 then runs on ${rulesSummary(2)}.`}
+                cards={gateCards}
+                level={level}
+                blurb={`Level ${level} feedback appears here once the portal is open. Every Level ${level - 1} section needs a passing best score first — only your best attempt counts. Level ${level} then runs on ${rulesSummary(level)}.`}
               />
             )}
           </Box>

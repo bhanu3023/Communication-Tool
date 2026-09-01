@@ -14,6 +14,14 @@ export const getMyAttempts = (level) =>
   api.get('/employee/attempts', { params: level ? { level } : {} }).then((r) => r.data);
 export const getSections = (level = 1) =>
   api.get('/employee/sections', { params: { level } }).then((r) => r.data);
+/**
+ * Whether a level has questions seeded yet, per section. Only the Level 3 portal calls this:
+ * Levels 1 and 2 have had full banks since before it existed, so asking there would be a
+ * round-trip to be told what is already certain.
+ */
+export const getLevelReadiness = (level = 1) =>
+  api.get('/employee/level-readiness', { params: { level } }).then((r) => r.data);
+
 export const requestAttempt = (section, level = 1) =>
   api.post('/employee/request-attempt', null, { params: { section, level } }).then((r) => r.data);
 

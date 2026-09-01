@@ -29,6 +29,25 @@ Three assessment modules (Listening / Speaking / Writing), each: controller `/ap
 (`ProctorEvent`), `ManagerController`/`ManagerService` (team + PDF via `PdfService`), `DashboardService`,
 `AttemptService`/`AttemptPolicy`/`SectionAttemptControl`.
 
+## Levels
+Three levels, each the SAME three sections at a higher bar. `AttemptPolicy` holds every
+per-level number and the gate:
+
+| Level | Pass mark | Attempts / section | Opens when |
+|---|---|---|---|
+| 1 | 75 | 2 | always |
+| 2 | 80 | 2 | all three Level 1 sections passed |
+| 3 | 85 | 2 | all three Level 2 sections passed |
+
+`levelUnlocked(user, n)` checks only the level directly below, which is sufficient because
+level n-1 could not have been passed without n-2 having been passed first. Adding a level means
+two constants and an entry in the two switches — nothing else in the backend is level-aware.
+
+Level 3 shipped (2026-09-02) with its content banks EMPTY on purpose. `ContentReadinessService`
+and `GET /api/employee/level-readiness?level=n` report per-section counts so a portal can say
+"questions not published yet" instead of letting a candidate spend an attempt discovering it.
+Levels 1 and 2 never call it.
+
 ## Content selection (no repeats)
 All three modules pick content the same way, and the choice is **pinned to the session** so a
 reload mid-attempt cannot change it. `SpeakingSetService` does this for Speaking;

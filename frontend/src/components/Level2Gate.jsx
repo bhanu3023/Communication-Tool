@@ -31,24 +31,29 @@ function GateRow({ item }) {
 }
 
 /**
- * The single explanation of why Level 2 is closed, reused everywhere Level 2 can be
- * reached (portal, Feedback, AI Coach). One component means the answer to "why can't I
+ * The single explanation of why a level is closed, reused everywhere a locked level can be
+ * reached (portal, hub, Feedback, AI Coach). One component means the answer to "why can't I
  * get in?" is worded and styled identically wherever the user asks it.
+ *
+ * `level` is which level is CLOSED; `cards` are the sections of the level below it, whose
+ * results decide the gate. It defaults to 2 so that every call site written before Level 3
+ * existed renders exactly the card it rendered then.
  */
-export default function Level2Gate({ cards, blurb }) {
+export default function Level2Gate({ cards, blurb, level = 2 }) {
   const navigate = useNavigate();
   const progress = gateProgress(cards);
+  const below = Math.max(1, level - 1);
 
   return (
     <Card>
       <CardContent>
         <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.5 }}>
           <LockIcon sx={{ color: LOCKED_THEME.accent }} />
-          <Typography variant="h6">How to unlock Level 2</Typography>
+          <Typography variant="h6">How to unlock Level {level}</Typography>
         </Stack>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
           {blurb ||
-            'Every Level 1 section needs a passing best score. Retakes count — only your best attempt matters.'}
+            `Every Level ${below} section needs a passing best score. Retakes count — only your best attempt matters.`}
         </Typography>
         <Divider sx={{ mb: 1 }} />
         {progress.map((item) => (
@@ -58,9 +63,9 @@ export default function Level2Gate({ cards, blurb }) {
           variant="contained"
           sx={{ mt: 2 }}
           endIcon={<ArrowForwardIcon />}
-          onClick={() => navigate('/assessment')}
+          onClick={() => navigate(below === 1 ? '/assessment' : `/assessment?level=${below}`)}
         >
-          Go to Level 1 tests
+          Go to Level {below} tests
         </Button>
       </CardContent>
     </Card>

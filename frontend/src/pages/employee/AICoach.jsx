@@ -98,6 +98,9 @@ function FeedbackColumn({ col, items }) {
 export default function AICoach() {
   const [data, setData] = useState(null);
   const [level1Cards, setLevel1Cards] = useState(null);
+  // Level 2 sections, fetched only when the Level 3 tab is opened: they explain the Level 3
+  // gate the way the Level 1 cards explain the Level 2 one.
+  const [level2Cards, setLevel2Cards] = useState(null);
   const [level, setLevel] = useState(1);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
@@ -114,19 +117,27 @@ export default function AICoach() {
       .finally(() => setLoading(false));
   }, [level, showToast]);
 
-  // Level 1 cards drive the gate, whichever tab is open.
+  // Level 1 cards drive the Level 2 gate, whichever tab is open.
   useEffect(() => {
     getSections(1)
       .then(setLevel1Cards)
       .catch(() => setLevel1Cards(null));
   }, []);
 
+  useEffect(() => {
+    if (level === 3 && level2Cards === null) {
+      getSections(2).then(setLevel2Cards).catch(() => setLevel2Cards([]));
+    }
+  }, [level, level2Cards]);
+
   if (loading) return <LoadingScreen />;
   if (!data) return null;
 
   const fb = data.aiFeedback || {};
-  const level2Open = isLevel1Complete(level1Cards);
-  const hasLevel2Data = level === 2 && (data.cards || []).some((c) => c.attemptsUsed > 0);
+  // The gate for the tab being viewed, and whether that tab has anything to coach on yet.
+  const gateCards = level === 3 ? level2Cards : level1Cards;
+  const levelOpen = isLevel1Complete(gateCards);
+  const hasLevelData = level >= 2 && (data.cards || []).some((c) => c.attemptsUsed > 0);
 
   return (
     <Box>
@@ -164,7 +175,7 @@ export default function AICoach() {
         <LevelTabs value={level} onChange={setLevel} cards={level1Cards} sx={{ mt: 2.5 }} />
       </Paper>
 
-      {level === 1 || hasLevel2Data ? (
+      {level === 1 || hasLevelData ? (
         <Fade in timeout={260} key={`coach-${level}`}>
           <Box>
             {/* Three feedback columns */}
@@ -181,7 +192,7 @@ export default function AICoach() {
               <Button
                 variant="contained"
                 endIcon={<ArrowForwardIcon />}
-                onClick={() => navigate(level === 2 ? '/level-2' : '/assessment')}
+                onClick={() => navigate(level === 1 ? '/assessment' : `/level-${level}`)}
               >
                 Go to Test
               </Button>
@@ -189,17 +200,18 @@ export default function AICoach() {
           </Box>
         </Fade>
       ) : (
-        <Fade in timeout={260} key="coach2-empty">
+        <Fade in timeout={260} key={`coach${level}-empty`}>
           <Box>
-            {level2Open ? (
+            {levelOpen ? (
               <Level2Empty
-                title="Level 2 coaching starts with your first attempt"
-                body={`Your Level 2 portal is open (${rulesSummary(2)}). Once you complete a Level 2 test, your strengths, focus areas and suggestions for that level appear here — separate from your Level 1 coaching, and judged against the higher ${levelRules(2).passMark} bar.`}
+                title={`Level ${level} coaching starts with your first attempt`}
+                body={`Your Level ${level} portal is open (${rulesSummary(level)}). Once you complete a Level ${level} test, your strengths, focus areas and suggestions for that level appear here — separate from your Level 1 coaching, and judged against the higher ${levelRules(level).passMark} bar.`}
               />
             ) : (
               <Level2Gate
-                cards={level1Cards}
-                blurb={`Level 2 coaching unlocks with the portal. Pass every Level 1 section first — only your best attempt in each counts. Level 2 then runs on ${rulesSummary(2)}.`}
+                cards={gateCards}
+                level={level}
+                blurb={`Level ${level} coaching unlocks with the portal. Pass every Level ${level - 1} section first — only your best attempt in each counts. Level ${level} then runs on ${rulesSummary(level)}.`}
               />
             )}
           </Box>

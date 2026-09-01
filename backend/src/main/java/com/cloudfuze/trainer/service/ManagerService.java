@@ -29,6 +29,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -129,24 +130,35 @@ public class ManagerService {
             warnings.put((Long) row[0], ((Number) row[1]).intValue());
         }
 
-        Set<Long> level2Open = level2UnlockedFor(ids);
+        Set<Long> level2Open = unlockedFor(ids, AttemptPolicy.LEVEL_TWO);
+        // The gate for the level being VIEWED. At Level 2 it is the set we already have, and at
+        // Level 1 it needs no query at all, so only a Level 3 view costs a second aggregate.
+        Set<Long> selectedOpen = level == AttemptPolicy.LEVEL_TWO ? level2Open : unlockedFor(ids, level);
 
         return employees.stream()
                 .map(e -> row(e, level, attempts.getOrDefault(e.getId(), Map.of()),
-                        pending, warnings.getOrDefault(e.getId(), 0), level2Open.contains(e.getId())))
+                        pending, warnings.getOrDefault(e.getId(), 0),
+                        level2Open.contains(e.getId()), selectedOpen.contains(e.getId())))
                 .toList();
     }
 
     /**
-     * Which of these users have Level 2 open — i.e. passed all three Level 1 sections.
-     * One aggregate for the whole team; asking {@code AttemptPolicy} per user would run
-     * three best-score queries each.
+     * Which of these users have a given level open — i.e. passed all three sections of the level
+     * below it, the same rule {@link AttemptPolicy#levelUnlocked} applies one user at a time.
+     * One aggregate for the whole team; asking {@code AttemptPolicy} per user would run three
+     * best-score queries each.
+     *
+     * <p>Level 1 is open to everyone and needs no query.
      */
-    private Set<Long> level2UnlockedFor(List<Long> userIds) {
+    private Set<Long> unlockedFor(List<Long> userIds, int level) {
+        if (level <= AttemptPolicy.LEVEL_ONE) {
+            return new HashSet<>(userIds);
+        }
+        int below = level - 1;
         Map<Long, Integer> passedSections = new HashMap<>();
-        for (Object[] row : sessionRepository.findBestScoresByUsersAndLevel(userIds, AttemptPolicy.LEVEL_ONE)) {
+        for (Object[] row : sessionRepository.findBestScoresByUsersAndLevel(userIds, below)) {
             Double best = (Double) row[2];
-            if (best != null && best >= AttemptPolicy.passMark(AttemptPolicy.LEVEL_ONE)) {
+            if (best != null && best >= AttemptPolicy.passMark(below)) {
                 passedSections.merge((Long) row[0], 1, Integer::sum);
             }
         }
@@ -158,7 +170,8 @@ public class ManagerService {
 
     /** One team row, built entirely from the pre-fetched batches above. */
     private ManagerDtos.TeamRow row(User e, int level, Map<Section, List<AssessmentSession>> bySection,
-                                    Set<String> pending, int warnings, boolean level2Open) {
+                                    Set<String> pending, int warnings, boolean level2Open,
+                                    boolean levelOpen) {
         boolean requestPending = false;
         for (Section s : Section.values()) {
             if (pending.contains(e.getId() + "#" + s)) {
@@ -172,6 +185,7 @@ public class ManagerService {
                 e.getTeam() != null ? e.getTeam().getName() : null,
                 level,
                 level2Open,
+                levelOpen,
                 latestScore(bySection.get(Section.LISTENING)),
                 latestScore(bySection.get(Section.SPEAKING)),
                 latestScore(bySection.get(Section.WRITING)),
@@ -402,6 +416,7 @@ public class ManagerService {
                 employee.getManager() != null ? employee.getManager().getName() : null,
                 level,
                 attemptPolicy.levelUnlocked(employee.getId(), AttemptPolicy.LEVEL_TWO),
+                attemptPolicy.levelUnlocked(employee.getId(), AttemptPolicy.LEVEL_THREE),
                 sections, warnings,
                 new DashboardDtos.AiFeedback(fb.strengths(), fb.weaknesses(), fb.suggestions()),
                 new ArrayList<>(fb.suggestions()));

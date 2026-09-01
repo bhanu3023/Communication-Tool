@@ -37,6 +37,22 @@ public final class DashboardDtos {
     public record AiFeedback(List<String> strengths, List<String> weaknesses, List<String> suggestions) {
     }
 
+    /** One section's content stock at a level: how much is seeded, and whether it can run. */
+    public record SectionReadiness(
+            String section,
+            int items,
+            boolean ready,
+            String label       // "41 stories" / "No prompts yet" — ready to render as-is
+    ) {
+    }
+
+    /** Whether a level has enough content seeded to be taken at all. */
+    public record LevelReadiness(
+            int level,
+            boolean ready,
+            List<SectionReadiness> sections) {
+    }
+
     public record EmployeeDashboard(
             String name,
             int level,

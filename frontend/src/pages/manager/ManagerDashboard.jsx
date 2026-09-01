@@ -269,7 +269,9 @@ export default function ManagerDashboard() {
                 borderTop: i === 0 ? 'none' : '1px solid',
                 borderColor: 'divider',
                 transition: 'background .15s',
-                opacity: level === 2 && !r.level2Unlocked ? 0.55 : 1,
+                // Dim rows for a level this employee has not reached. `levelUnlocked` is the
+                // gate for the level being VIEWED, so this reads correctly at Level 3 too.
+                opacity: level > 1 && !(r.levelUnlocked ?? r.level2Unlocked) ? 0.55 : 1,
                 '&:hover': { bgcolor: 'rgba(48,0,174,0.04)' },
               }}
             >

@@ -11,33 +11,45 @@ import org.springframework.stereotype.Component;
  * gets its own attempts at each level; when a section's attempts are used up the
  * candidate may request more from their manager.
  *
- * Both levels now allow the same 2 attempts per section, so the pass mark is the only
- * number that differs; everything else (scoring, proctoring, feedback) is identical. The
- * per-level constants are kept separate so either level can be re-tuned on its own:
+ * Every level allows the same 2 attempts per section, so the pass mark is the only number
+ * that differs; everything else (scoring, proctoring, feedback) is identical. The per-level
+ * constants are kept separate so any one level can be re-tuned on its own:
  *
  * <pre>
  *   Level 1: 2 attempts per section, pass mark 75
  *   Level 2: 2 attempts per section, pass mark 80   (and it must be unlocked first)
+ *   Level 3: 2 attempts per section, pass mark 85   (and it must be unlocked first)
  * </pre>
  *
- * Level 2 unlocks only when ALL THREE Level 1 sections have been passed.
+ * <p>A level unlocks when ALL THREE sections of the level below it have been passed: Level 2
+ * on Level 1, Level 3 on Level 2. That rule is expressed once, in {@link #levelUnlocked}, so a
+ * fourth level would need only its two constants and an entry in the switches below.
+ *
+ * <p>Level 3 was added on 2026-09-02 without changing a single Level 1 or Level 2 number. The
+ * generalisations here are deliberately shaped so that, for levels 1 and 2, they compute exactly
+ * what the hard-coded versions computed before — including the wording of the locked message.
  */
 @Component
 public class AttemptPolicy {
 
     public static final int LEVEL_ONE = 1;
     public static final int LEVEL_TWO = 2;
-    public static final int MAX_LEVEL = LEVEL_TWO;
+    public static final int LEVEL_THREE = 3;
+    public static final int MAX_LEVEL = LEVEL_THREE;
 
     /** Base attempts every candidate gets per section, at Level 1. */
     public static final int BASE_ATTEMPTS_PER_SECTION = 2;
     /** Base attempts per section at Level 2. */
     public static final int BASE_ATTEMPTS_PER_SECTION_LEVEL_2 = 2;
+    /** Base attempts per section at Level 3. */
+    public static final int BASE_ATTEMPTS_PER_SECTION_LEVEL_3 = 2;
 
     /** Score needed to pass a section (best attempt) at Level 1. */
     public static final double PASS_MARK = 75.0;
     /** Score needed to pass a section at Level 2 — a higher bar. */
     public static final double PASS_MARK_LEVEL_2 = 80.0;
+    /** Score needed to pass a section at Level 3 — the highest bar the app sets. */
+    public static final double PASS_MARK_LEVEL_3 = 85.0;
 
     private final AssessmentSessionRepository sessionRepository;
     private final SectionAttemptControlRepository controlRepository;
@@ -57,11 +69,19 @@ public class AttemptPolicy {
     }
 
     public static int baseAttempts(int level) {
-        return level == LEVEL_TWO ? BASE_ATTEMPTS_PER_SECTION_LEVEL_2 : BASE_ATTEMPTS_PER_SECTION;
+        return switch (level) {
+            case LEVEL_THREE -> BASE_ATTEMPTS_PER_SECTION_LEVEL_3;
+            case LEVEL_TWO -> BASE_ATTEMPTS_PER_SECTION_LEVEL_2;
+            default -> BASE_ATTEMPTS_PER_SECTION;
+        };
     }
 
     public static double passMark(int level) {
-        return level == LEVEL_TWO ? PASS_MARK_LEVEL_2 : PASS_MARK;
+        return switch (level) {
+            case LEVEL_THREE -> PASS_MARK_LEVEL_3;
+            case LEVEL_TWO -> PASS_MARK_LEVEL_2;
+            default -> PASS_MARK;
+        };
     }
 
     // ---- attempt accounting (always scoped to one section at one level) ----
@@ -124,21 +144,30 @@ public class AttemptPolicy {
     }
 
     /**
-     * Level 1 is always open. Level 2 opens only when every Level 1 section has been
-     * passed — however many attempts that took.
+     * Level 1 is always open. Every level above it opens only when all three sections of the
+     * level immediately below have been passed — however many attempts that took.
+     *
+     * <p>Only the level DIRECTLY below is checked, which is not a shortcut: Level 2 cannot have
+     * been passed without Level 1 having been passed first, because Level 2 could not have been
+     * started otherwise. Walking the whole chain would ask the same question twice.
      */
     public boolean levelUnlocked(Long userId, int level) {
         if (level <= LEVEL_ONE) return true;
         for (Section s : Section.values()) {
-            if (!passed(userId, s, LEVEL_ONE)) return false;
+            if (!passed(userId, s, level - 1)) return false;
         }
         return true;
     }
 
-    /** Sections still standing between the candidate and Level 2. */
+    /**
+     * Why a level is closed, naming the level below it and that level's pass mark. For Level 2
+     * this produces the exact sentence it produced before Level 3 existed — the wording is load
+     * bearing, since it is what the candidate reads on a locked portal.
+     */
     public String lockedMessage(int level) {
-        return "Level " + level + " is locked. Pass all three Level 1 sections first "
-                + "(a best score of " + (int) PASS_MARK + " or above in each).";
+        int below = Math.max(LEVEL_ONE, level - 1);
+        return "Level " + level + " is locked. Pass all three Level " + below + " sections first "
+                + "(a best score of " + (int) passMark(below) + " or above in each).";
     }
 
     public String blockedMessage(Section section, int level) {

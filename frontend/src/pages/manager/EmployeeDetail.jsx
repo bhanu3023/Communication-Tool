@@ -166,7 +166,8 @@ export default function EmployeeDetail() {
   const [downloading, setDownloading] = useState(false);
   // Arrives from the team table so the manager stays on the level they were reviewing.
   const [searchParams] = useSearchParams();
-  const [level, setLevel] = useState(Number(searchParams.get('level')) === 2 ? 2 : 1);
+  const initialLevel = Number(searchParams.get('level'));
+  const [level, setLevel] = useState(initialLevel === 2 || initialLevel === 3 ? initialLevel : 1);
 
   // Where "Back to team" goes. The team page keeps its filters in the query string and hands
   // that whole view over in location.state.from, so going back lands on the same filtered table
@@ -260,25 +261,34 @@ export default function EmployeeDetail() {
         <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mt: 2.5 }} flexWrap="wrap" useFlexGap>
           <LevelTabs value={level} onChange={setLevel} alwaysUnlocked />
           <Chip size="small" variant="outlined" label={rulesSummary(level)} />
-          {detail.level2Unlocked ? (
-            <Chip
-              size="small"
-              label="Level 2 unlocked"
-              sx={{ bgcolor: `${levelTheme(2).accent}14`, color: levelTheme(2).accent, fontWeight: 700 }}
-            />
-          ) : (
-            <Chip size="small" variant="outlined" label="Level 2 not unlocked" />
+          {[
+            { n: 2, open: detail.level2Unlocked },
+            { n: 3, open: detail.level3Unlocked },
+          ].map(({ n, open }) =>
+            open ? (
+              <Chip
+                key={n}
+                size="small"
+                label={`Level ${n} unlocked`}
+                sx={{ bgcolor: `${levelTheme(n).accent}14`, color: levelTheme(n).accent, fontWeight: 700 }}
+              />
+            ) : (
+              <Chip key={n} size="small" variant="outlined" label={`Level ${n} not unlocked`} />
+            ),
           )}
         </Stack>
       </Paper>
 
-      {/* A Level 2 view for someone who never got there would otherwise look like a
-          string of empty sections; say why instead. */}
-      {level === 2 && !detail.level2Unlocked && (
+      {/* A view of a level someone never reached would otherwise look like a string of empty
+          sections; say why instead. */}
+      {level > 1 && !(level === 2 ? detail.level2Unlocked : detail.level3Unlocked) && (
         <Alert severity="info" sx={{ mb: 3 }}>
-          <strong>{detail.name.split(' ')[0]} has not unlocked Level 2 yet.</strong> All three Level 1
-          sections must be passed first, so there is nothing to review here. You can still grant Level 2
-          attempts in advance — they apply the moment the portal opens.
+          <strong>
+            {detail.name.split(' ')[0]} has not unlocked Level {level} yet.
+          </strong>{' '}
+          All three Level {level - 1} sections must be passed first, so there is nothing to review
+          here. You can still grant Level {level} attempts in advance — they apply the moment the
+          portal opens.
         </Alert>
       )}
 

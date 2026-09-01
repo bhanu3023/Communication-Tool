@@ -4,6 +4,7 @@ import SpaceDashboardIcon from '@mui/icons-material/SpaceDashboardOutlined';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesomeOutlined';
 import RateReviewIcon from '@mui/icons-material/RateReviewOutlined';
 import RocketLaunchIcon from '@mui/icons-material/RocketLaunchOutlined';
+import WorkspacePremiumIcon from '@mui/icons-material/WorkspacePremiumOutlined';
 import GroupsIcon from '@mui/icons-material/GroupsOutlined';
 import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettingsOutlined';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -20,6 +21,7 @@ const Dashboard = lazy(() => import('./pages/employee/Dashboard'));
 const Feedback = lazy(() => import('./pages/employee/Feedback'));
 const AICoach = lazy(() => import('./pages/employee/AICoach'));
 const Level2 = lazy(() => import('./pages/employee/Level2'));
+const Level3 = lazy(() => import('./pages/employee/Level3'));
 const AssessmentHub = lazy(() => import('./pages/assessment/AssessmentHub'));
 const Listening = lazy(() => import('./pages/assessment/Listening'));
 const Speaking = lazy(() => import('./pages/assessment/Speaking'));
@@ -32,6 +34,12 @@ const ManagerAccess = lazy(() => import('./pages/manager/ManagerAccess'));
 const EMPLOYEE_NAV = [
   { label: 'Level 1', icon: <SpaceDashboardIcon />, path: '/dashboard', match: (p) => p === '/dashboard' || p.startsWith('/assessment') },
   { label: 'Level 2', icon: <RocketLaunchIcon />, path: '/level-2', match: (p) => p.startsWith('/level-2') },
+  {
+    label: 'Level 3',
+    icon: <WorkspacePremiumIcon />,
+    path: '/level-3',
+    match: (p) => p.startsWith('/level-3'),
+  },
   { label: 'AI Coach', icon: <AutoAwesomeIcon />, path: '/coach', match: (p) => p.startsWith('/coach') },
   { label: 'Feedback', icon: <RateReviewIcon />, path: '/feedback', match: (p) => p.startsWith('/feedback') },
 ];
@@ -66,6 +74,7 @@ export default function App() {
         >
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/level-2" element={<Level2 />} />
+          <Route path="/level-3" element={<Level3 />} />
           <Route path="/coach" element={<AICoach />} />
           <Route path="/feedback" element={<Feedback />} />
           <Route path="/assessment" element={<AssessmentHub />} />

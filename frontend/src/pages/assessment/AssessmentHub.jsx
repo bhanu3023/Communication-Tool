@@ -21,6 +21,7 @@ const SECTIONS = [
     detail: {
       1: 'One ~2-minute story, played once. Then 10 comprehension questions.',
       2: 'One dense cutover briefing, played once. 10 inference questions — answers are implied, not stated.',
+      3: 'A long briefing played once, with questions whose answers are implied rather than stated.',
     },
   },
   {
@@ -31,6 +32,7 @@ const SECTIONS = [
     detail: {
       1: '10 business-migration sentences to repeat aloud. Uses your microphone.',
       2: '10 sentences of two lines each — migration terminology, business idiom and spoken figures.',
+      3: 'Extended passages read aloud, judged on the English you produce rather than the echo.',
     },
   },
   {
@@ -41,6 +43,7 @@ const SECTIONS = [
     detail: {
       1: '2 professional writing tasks · 5 min to read + 10 min to write each · auto-saved.',
       2: 'A live customer escalation and an incident report, marked hardest on completeness.',
+      3: 'A situation with several things to hold together, marked hardest on completeness and precision.',
     },
   },
 ];
@@ -54,12 +57,14 @@ export default function AssessmentHub() {
   const navigate = useNavigate();
   const { showToast } = useToast();
   const [searchParams] = useSearchParams();
-  const level = Number(searchParams.get('level')) === 2 ? 2 : 1;
+  // Anything outside the levels we know about falls back to Level 1 rather than 404ing.
+  const requested = Number(searchParams.get('level'));
+  const level = requested === 2 || requested === 3 ? requested : 1;
   const [cards, setCards] = useState(null);
   const [level1Cards, setLevel1Cards] = useState(null);
   const [requesting, setRequesting] = useState(false);
   const t = levelTheme(level);
-  const homePath = level === 2 ? '/level-2' : '/dashboard';
+  const homePath = level === 1 ? '/dashboard' : `/level-${level}`;
 
   const load = useCallback(
     () => getSections(level).then(setCards).catch(() => showToast('Could not load sections', 'error')),
@@ -72,7 +77,8 @@ export default function AssessmentHub() {
 
   // Only needed to explain a closed Level 2 gate.
   useEffect(() => {
-    if (level === 2) getSections(1).then(setLevel1Cards).catch(() => setLevel1Cards(null));
+    // The gate checklist shows the level BELOW the one being entered.
+    if (level > 1) getSections(level - 1).then(setLevel1Cards).catch(() => setLevel1Cards(null));
   }, [level]);
 
   const cardFor = (code) => (cards || []).find((c) => c.section === code);
@@ -109,7 +115,7 @@ export default function AssessmentHub() {
 
       {/* A locked level must not offer its tests, whatever the URL says. */}
       {locked ? (
-        <Level2Gate cards={level1Cards} />
+        <Level2Gate cards={level1Cards} level={level} />
       ) : (
         <Grid container spacing={2}>
           {SECTIONS.map((s) => {
