@@ -28,12 +28,34 @@ const SNIPPET_VERSION = 6;
 export const hotjarEnabled = () => Boolean(HOTJAR_SITE_ID);
 
 /**
- * Injects the official Hotjar snippet once.
+ * Runs a callback once the browser has nothing better to do, and no later than `timeout`.
+ *
+ * Hotjar's loader pulls a second script and opens two more connections, and Lighthouse clocked
+ * it as a 106 ms long task — all of it competing with the JavaScript the user is actually
+ * waiting for, because initHotjar() runs before the first React render. Idle time is exactly
+ * where analytics belongs. The timeout is the safety net: a page that never goes idle still
+ * starts recording, just a beat late.
+ */
+function whenIdle(fn) {
+  if (typeof window.requestIdleCallback === 'function') {
+    window.requestIdleCallback(fn, { timeout: 3000 });
+  } else {
+    window.setTimeout(fn, 1200);
+  }
+}
+
+/**
+ * Sets up the Hotjar queue, and schedules the official snippet to load once the app is idle.
+ *
+ * The queue (`window.hj`) is installed SYNCHRONOUSLY even though the script is not: calls made
+ * during the first render — identify, in particular — are buffered and replayed when the remote
+ * script arrives, which is the same contract Hotjar's own inline snippet provides. Deferring the
+ * queue too would silently drop them, since identifyHotjar bails when window.hj is missing.
  *
  * Idempotent on purpose: a second call is a no-op, so React StrictMode's double-invoke in
  * development cannot open two recordings for one page view.
  *
- * @returns {boolean} true only when this call actually injected the script.
+ * @returns {boolean} true only when this call actually armed the queue and scheduled the script.
  */
 export function initHotjar() {
   if (!hotjarEnabled()) return false;
@@ -64,11 +86,16 @@ export function initHotjar() {
     // script reads it back. The digits-only guard above means Number() cannot NaN here.
     window._hjSettings = { hjid: Number(HOTJAR_SITE_ID), hjsv: SNIPPET_VERSION };
 
-    const script = document.createElement('script');
-    script.id = SCRIPT_ID;
-    script.async = true;
-    script.src = `https://static.hotjar.com/c/hotjar-${HOTJAR_SITE_ID}.js?sv=${SNIPPET_VERSION}`;
-    document.head.appendChild(script);
+    whenIdle(() => {
+      // Re-check inside the callback: between scheduling and running, a second initHotjar or a
+      // hot reload could have inserted the tag already.
+      if (document.getElementById(SCRIPT_ID)) return;
+      const script = document.createElement('script');
+      script.id = SCRIPT_ID;
+      script.async = true;
+      script.src = `https://static.hotjar.com/c/hotjar-${HOTJAR_SITE_ID}.js?sv=${SNIPPET_VERSION}`;
+      document.head.appendChild(script);
+    });
     return true;
   } catch {
     // Analytics must never take the app down with it.

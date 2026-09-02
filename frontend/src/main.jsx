@@ -5,7 +5,7 @@ import { MsalProvider } from '@azure/msal-react';
 import { ThemeProvider, CssBaseline } from '@mui/material';
 import { msalInstance } from './authConfig';
 import theme from './theme';
-import App from './App';
+import App, { preloadRouteChunk } from './App';
 import ErrorBoundary from './components/ErrorBoundary';
 import { AuthProvider } from './contexts/AuthContext';
 import { ToastProvider } from './contexts/ToastContext';
@@ -13,8 +13,13 @@ import { initHotjar } from './utils/hotjar';
 import './index.css';
 
 // Before the first render so early interactions are captured. No-op unless a site id was
-// baked in at build time.
+// baked in at build time. The remote script itself loads on idle — see utils/hotjar.js.
 initHotjar();
+
+// Ask for the current page's chunk NOW, in parallel with everything below, instead of after
+// MSAL, AuthContext and the route guard have all had their turn. Pure prefetch: React.lazy
+// reuses the same promise when it renders, so nothing here decides what the user sees.
+preloadRouteChunk(window.location.pathname);
 
 function renderApp() {
   ReactDOM.createRoot(document.getElementById('root')).render(

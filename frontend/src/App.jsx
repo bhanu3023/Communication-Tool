@@ -16,19 +16,62 @@ import ExamLayout from './layouts/ExamLayout';
 // all three assessment pages into the first download, so signing in meant waiting on code
 // for screens you may never open. The guards and layouts stay eager — they are small and
 // on the path to every route anyway.
-const Login = lazy(() => import('./pages/Login'));
-const Dashboard = lazy(() => import('./pages/employee/Dashboard'));
-const Feedback = lazy(() => import('./pages/employee/Feedback'));
-const AICoach = lazy(() => import('./pages/employee/AICoach'));
-const Level2 = lazy(() => import('./pages/employee/Level2'));
-const Level3 = lazy(() => import('./pages/employee/Level3'));
-const AssessmentHub = lazy(() => import('./pages/assessment/AssessmentHub'));
-const Listening = lazy(() => import('./pages/assessment/Listening'));
-const Speaking = lazy(() => import('./pages/assessment/Speaking'));
-const Writing = lazy(() => import('./pages/assessment/Writing'));
-const ManagerDashboard = lazy(() => import('./pages/manager/ManagerDashboard'));
-const EmployeeDetail = lazy(() => import('./pages/manager/EmployeeDetail'));
-const ManagerAccess = lazy(() => import('./pages/manager/ManagerAccess'));
+//
+// `lazy()` only starts its import when React first tries to RENDER the component, and on a cold
+// load that is a long way off: the whole bundle has to parse, MSAL has to settle, AuthContext has
+// to resolve, and the route guard has to pass. Only then does the browser learn it needs one more
+// file — a full round trip appended to the end of the critical path, every time. Keeping the
+// factory on the component lets main.jsx ask for the page a user is already navigating to at the
+// same moment the bundle starts up. React.lazy reuses the promise, so this cannot load a page
+// twice and cannot change what renders; it only moves the request earlier.
+const lazyPage = (factory) => {
+  const Component = lazy(factory);
+  Component.preload = factory;
+  return Component;
+};
+
+const Login = lazyPage(() => import('./pages/Login'));
+const Dashboard = lazyPage(() => import('./pages/employee/Dashboard'));
+const Feedback = lazyPage(() => import('./pages/employee/Feedback'));
+const AICoach = lazyPage(() => import('./pages/employee/AICoach'));
+const Level2 = lazyPage(() => import('./pages/employee/Level2'));
+const Level3 = lazyPage(() => import('./pages/employee/Level3'));
+const AssessmentHub = lazyPage(() => import('./pages/assessment/AssessmentHub'));
+const Listening = lazyPage(() => import('./pages/assessment/Listening'));
+const Speaking = lazyPage(() => import('./pages/assessment/Speaking'));
+const Writing = lazyPage(() => import('./pages/assessment/Writing'));
+const ManagerDashboard = lazyPage(() => import('./pages/manager/ManagerDashboard'));
+const EmployeeDetail = lazyPage(() => import('./pages/manager/EmployeeDetail'));
+const ManagerAccess = lazyPage(() => import('./pages/manager/ManagerAccess'));
+
+// Longest prefix wins, so /manager/employee/7 does not preload the team list. Anything not
+// listed — an unknown path, or the "/" redirect — simply preloads nothing.
+const ROUTE_CHUNKS = [
+  ['/login', Login],
+  ['/dashboard', Dashboard],
+  ['/level-2', Level2],
+  ['/level-3', Level3],
+  ['/coach', AICoach],
+  ['/feedback', Feedback],
+  ['/assessment', AssessmentHub],
+  ['/assessment/listening', Listening],
+  ['/assessment/speaking', Speaking],
+  ['/assessment/writing', Writing],
+  ['/manager', ManagerDashboard],
+  ['/manager/access', ManagerAccess],
+  ['/manager/employee', EmployeeDetail],
+].sort((a, b) => b[0].length - a[0].length);
+
+/**
+ * Starts downloading the page chunk for `pathname`, if there is one.
+ *
+ * Called once at start-up. Deliberately forgiving: a rejection here is not the user's problem —
+ * React will request the same chunk again when it renders, and report the failure then.
+ */
+export function preloadRouteChunk(pathname) {
+  const match = ROUTE_CHUNKS.find(([prefix]) => pathname === prefix || pathname.startsWith(`${prefix}/`));
+  if (match) match[1].preload().catch(() => {});
+}
 
 // Sidebar nav for each role (label, icon, path, active-match).
 const EMPLOYEE_NAV = [

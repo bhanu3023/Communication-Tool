@@ -545,3 +545,55 @@ dependency, schema change, boundary exception, or naming/collision resolution.
   What remains in the sign-in path is MSAL round-tripping to Microsoft, which is not ours.
 - **Local data is 16 MB against 215 MB in production**, so none of this was found by timing
   queries -- it was found by looking for fixed costs that small data cannot hide.
+
+
+### Second performance pass: the critical path, not the server (2026-09-03)
+- **Reported:** a Lighthouse mobile score of 68 on `/manager?level=3` in production, with LCP and
+  CLS the two metrics in the red. Measured with the Lighthouse CLI against production and then
+  against before/after containers on isolated ports, three runs each, rather than reasoned about.
+- **The font was the most expensive thing on the page.** Poppins came from a render-blocking
+  `<link>` to fonts.googleapis.com, so the browser could not paint until it had done DNS, TCP and
+  TLS to a third origin, read that CSS, and then repeated the handshake for fonts.gstatic.com to
+  fetch the woff2. Lighthouse costed those two hops at 870 ms. All twelve faces are now served
+  from `/fonts/` — same weights, same unicode-ranges, so the same subsets download — with the
+  three above-the-fold weights preloaded from the HTML.
+- **`font-display: swap` was the whole CLS problem.** Text painted in Arial and then re-laid out
+  when Poppins arrived, moving every line on the page at once. A `'Poppins Fallback'` face with
+  Poppins' own metrics (ascent 1050 / descent 350 / line-gap 100, over a 112.15% size-adjust for
+  Arial) makes the swap a no-op. **CLS 0.0054 -> 0.0000.** Worth more in production than the local
+  numbers show, because the swap only happens when the font arrives late.
+- **`manualChunks` had quietly undone the code splitting.** The function ended in
+  `return 'vendor'`, and a catch-all forces every node_modules module into one of three
+  eagerly-preloaded chunks. All 843 `@mui` modules — Autocomplete, Tooltip, Dialog, Snackbar and
+  the 57 kB of popper.js behind them — sat in a 338 kB chunk on the critical path although only
+  lazy pages use them; Lighthouse reported 136 kB of unused JavaScript. Returning `undefined`
+  hands placement back to Rollup, which puts component code in the chunk that imports it. Eager
+  payload **921 kB -> 787 kB raw, 271 kB -> 235 kB gzipped**. Packaging only: Rollup still puts
+  each module in exactly one chunk, so Emotion stays a singleton and styles insert at render time
+  as before.
+- **Nothing painted until React did.** `main.jsx` waits for MSAL to settle before its first
+  render, which meant 3.3 s of blank white page. A static app shell in `index.html` paints in the
+  first frame (**observed FCP 49 ms**) and `createRoot().render()` clears it. Simulated
+  **FCP 3324 -> 2180 ms, Speed Index 4480 -> 2180 ms**.
+- **Route chunks are requested at start-up, not after the guard passes.** `lazy()` only imports on
+  first render attempt, so the page chunk was a round trip appended after MSAL, AuthContext and
+  ProtectedRoute had each had their turn. `preloadRouteChunk(location.pathname)` asks for it in
+  parallel instead; React.lazy reuses the promise, so it cannot double-load or change what
+  renders.
+- **Hotjar moved off the critical path.** It was injected before the first render — two extra
+  origins and a 106 ms long task competing with the code the user is waiting for. The `window.hj`
+  queue is still installed synchronously (identifyHotjar drops calls without it); only the remote
+  script is deferred to `requestIdleCallback`.
+- **TBT went UP, 48 -> 264 ms, and that is expected.** TBT only counts blocking after FCP. Painting
+  at 2.2 s instead of 3.3 s moves script evaluation from before the paint to after it, so the same
+  work now scores. Total main-thread work actually **fell 1400 -> 1170 ms**. Net Lighthouse on that
+  page: **82 -> 85 locally**; on the signed-in page FCP went 2312 -> 904 ms.
+- **Also:** `/assets` cache 30d -> 1y (immutable already promised the bytes never change),
+  `/fonts` 1y, woff dropped from `gzip_types` (woff2 is already compressed), and width/height
+  attributes on the logo so the sign-in card stops reflowing when it decodes.
+- **Deliberately NOT done: MSAL.** 270 kB raw / 66 kB gzipped, 28% of everything that must load
+  before the first paint, and a signed-in manager never uses it on that page. Deferring it means
+  detecting an Azure redirect response before MSAL is loaded, which is the one code path that must
+  never break. Left for an explicit decision.
+- **bf-cache is failing for a good reason.** index.html is `no-store` on purpose — a cached copy
+  names chunk hashes that no longer exist after a deploy. Not to be "fixed".

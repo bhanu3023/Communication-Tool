@@ -3,22 +3,93 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#f4f7fb" />
     <link rel="icon" type="image/png" href="/favicon.png" />
     <link rel="apple-touch-icon" href="/favicon.png" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap"
-      rel="stylesheet"
-    />
+
+    <!-- Poppins is served from our own origin now (see src/index.css). These three weights carry
+         everything above the fold on every screen — body text at 400, buttons and names at 600,
+         page headings at 700 — so starting them here, during HTML parsing, means the font is
+         usually in memory before the CSS that asks for it has even been parsed. Only the `latin`
+         subset is preloaded; latin-ext and devanagari stay lazy behind their unicode-range, which
+         is what keeps three preloads down to 24 kB. crossorigin is required even same-origin:
+         fonts are always fetched in CORS mode, and without it the browser downloads the file a
+         second time instead of using the preloaded one. -->
+    <link rel="preload" as="font" type="font/woff2" href="/fonts/poppins-latin-400.woff2" crossorigin />
+    <link rel="preload" as="font" type="font/woff2" href="/fonts/poppins-latin-600.woff2" crossorigin />
+    <link rel="preload" as="font" type="font/woff2" href="/fonts/poppins-latin-700.woff2" crossorigin />
+
     <title>AI Communication Trainer — CloudFuze</title>
     <!-- Runtime config (Hotjar site id). Plain script, not a module, and BEFORE the bundle so
          window.__APP_CONFIG__ exists by the time main.jsx runs. Copied verbatim from public/,
-         so it can be edited on the server without rebuilding. -->
-    <script src="/runtime-config.js"></script>
+         so it can be edited on the server without rebuilding.
+         defer, so it no longer stops the parser mid-head: deferred scripts still run in document
+         order and still finish before any module script, which is the only ordering that
+         matters here. -->
+    <script defer src="/runtime-config.js"></script>
   </head>
   <body>
-    <div id="root"></div>
+    <!--
+      The app shell.
+
+      Everything below the sign-in check is React, and React cannot render until ~900 kB of
+      JavaScript has downloaded, parsed and run — and main.jsx deliberately waits for MSAL to
+      finish processing a possible redirect before it renders at all. On a mid-range phone that
+      was 3.9 s of blank white page, which is precisely what First Contentful Paint and Speed
+      Index measure. This markup needs nothing but the HTML, so it paints in the first frame.
+
+      ReactDOM.createRoot(...).render() empties #root, so this disappears the instant the real
+      UI is ready. Nothing here is interactive and nothing here is React's — do not add state,
+      class names the app relies on, or anything that has to stay in sync with a component.
+    -->
+    <div id="root">
+      <div class="app-boot" role="status" aria-label="Loading">
+        <div class="app-boot__mark">AI Communication Trainer</div>
+        <div class="app-boot__bar"><span></span></div>
+      </div>
+    </div>
+    <style>
+      .app-boot {
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 18px;
+        background: #f4f7fb;
+        font-family: 'Poppins', Arial, sans-serif;
+      }
+      .app-boot__mark {
+        color: #3000ae;
+        font-size: 20px;
+        font-weight: 700;
+        letter-spacing: 0.2px;
+        text-align: center;
+        padding: 0 24px;
+      }
+      .app-boot__bar {
+        width: 168px;
+        height: 4px;
+        border-radius: 4px;
+        background: rgba(48, 0, 174, 0.14);
+        overflow: hidden;
+      }
+      .app-boot__bar span {
+        display: block;
+        width: 40%;
+        height: 100%;
+        border-radius: 4px;
+        background: #3000ae;
+        animation: app-boot-slide 1.1s ease-in-out infinite;
+      }
+      @keyframes app-boot-slide {
+        0% { transform: translateX(-100%); }
+        100% { transform: translateX(320%); }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .app-boot__bar span { animation: none; width: 100%; }
+      }
+    </style>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>
