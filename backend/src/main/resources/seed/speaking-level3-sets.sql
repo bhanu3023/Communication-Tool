@@ -1,129 +1,182 @@
 -- =====================================================================
 -- Level 3 Speaking: spoken ANSWER questions, graduated length.
 --
--- Replaces the first cut of these questions, which ran 56 to 100 words in no particular order
--- inside a set. They open shorter now and grow: roughly two lines, two and a half, three, three
--- and a half, four. A candidate meets a compact question first and the longest one last, which is
--- the same warm-up principle the Level 1 and Level 2 sentence sets use.
+-- REWRITTEN AGAINST THE MIGRATION DOCUMENTATION (v3). The previous bank was audited against the
+-- feature matrices and three claims were wrong, one of them repeated eight times:
+--   * "Slack to Chat loses message formatting, runbooks arrive as plain text" -- inverted. The
+--     matrix gives Slack to Chat code format, block quote AND code block. Slack to TEAMS is the
+--     combination whose formatting stops at ordered lists.
+--   * "Threaded replies in Chat arrived in Teams as one flat post" -- channel threads are Yes for
+--     Chat to Teams. Flattening is a DM behaviour, and a channel behaviour only in the
+--     DMs-to-Channels and DMs-to-Spaces variants.
+--   * Slack to Teams described as carrying "reactions and pinned posts" -- reactions are No and
+--     pinned is NA for that combination.
+-- It also used six platform names in total, leaving Box, Dropbox, Egnyte, ShareFile, Amazon
+-- WorkDocs, NFS/SMB, Azure Blob, Whiteboard, Workplace, LinkEX, Teams to Slack and Chat to Slack
+-- entirely unused. Every set below is now built on a different documented combination, and every
+-- limitation named in a question is one the matrices actually record.
 --
---   Q1  ~30 words   two lines
---   Q2  ~38 words   two and a half
---   Q3  ~45 words   three
---   Q4  ~52 words   three and a half
---   Q5  ~60 words   four
+-- LENGTH LADDER, unchanged -- a candidate meets a compact question first and the longest last:
+--   Q1 ~30 words (two lines) · Q2 ~38 · Q3 ~45 · Q4 ~52 · Q5 ~60 (four lines)
 --
--- One trade-off is worth recording. The earlier rule was two full lines of SCENARIO and then the
--- ask, which cannot fit inside a two-line question. So Q1 and Q2 carry one tight scenario sentence
--- plus the ask, and from Q3 on there are two or more full lines of scenario before the ask. The
--- ladder wins at the short end because a candidate who meets a hundred-word question cold spends
--- their first thirty seconds reading rather than thinking.
+-- ASK ROTATION. The old bank asked the same five things in the same order in all twelve sets --
+-- check first, investigate, assess, assess, go or no-go -- so one set taught a candidate the
+-- shape of the other eleven. Ten ask types now rotate, and no two sets run them in the same order:
+--   (A) where would you start  (B) one problem or two  (C) what do you say on the call now
+--   (D) which do you sequence first  (E) assess this proposal  (F) explain to a non-technical
+--   stakeholder  (G) go or no-go  (H) what would you have established before quoting
+--   (I) you disagree with a colleague or the customer  (J) name the risk nobody has raised
 --
--- Everything else from the specification holds in every question: TWO connected migration
--- workstreams, a real dependency between them, the cause never stated, no platform pairing used
--- twice, failure patterns rotated, and the ten question types spread across the sets.
+-- Everything else from the specification holds: TWO connected migration workstreams, a real
+-- dependency between them, the cause never stated, no platform pairing used twice, failure
+-- patterns rotated.
 --
--- 12 sets of 5. Level 3 speaking is scored by AiService.scoreSpokenAnswer -- the candidate answers
--- aloud in their own words and the ANSWER is judged, not an echo.
+-- 12 sets of 5. Scored by AiService.scoreSpokenAnswer -- the candidate answers aloud in their own
+-- words and the ANSWER is judged, not an echo.
 --
 -- Avoid apostrophes: these are single-quoted SQL literals.
 -- =====================================================================
 DELETE FROM speaking_sentence WHERE level = 3
-  AND NOT EXISTS (SELECT 1 FROM seed_state WHERE seed_key = 'l3-speaking-questions-v2');
+  AND NOT EXISTS (SELECT 1 FROM seed_state WHERE seed_key = 'l3-speaking-questions-v3');
 
 -- ---------- Sets 1 to 6 ----------
 INSERT INTO speaking_sentence (created_at, updated_at, text, set_number, level, difficulty)
 SELECT now(), now(), v.text, v.set_number, 3, 'HARD'
 FROM (VALUES
-    -- Set 1: Slack to Teams + Shared Drive to SPO
-    ('A Slack to Teams cutover and a Shared Drive to SPO copy share one change window. The content copy is running behind. What would you check before agreeing to keep that window?', 1),
-    ('Users in migrated Teams channels can open some files and not others, with no pattern by department or by file type. The SharePoint workstream reports no failures and its reconciliation matches. How would you start investigating?', 1),
-    ('Messaging has moved to Teams but content stays in Shared Drives for another fortnight, and staff are posting Drive links into Teams channels. The customer asks whether that matters before the content migration runs. What is your assessment, and what would you recommend?', 1),
-    ('You are sequencing two workstreams for an acquisition: Slack to Teams for 900 users, and their project libraries from Shared Drive to SPO. The customer wants content first so people find their files on day one; your colleague argues for messaging first. Which would you choose, and what does your choice depend on?', 1),
-    ('After the Slack to Teams cutover a department says three years of conversation history is missing, while the SharePoint content migrated with nothing reported. The migration logs show those channels completed with no errors, and the customer has asked for an explanation on a call this afternoon. How would you handle that call, and what would you establish before offering any explanation at all?', 1),
+    -- Set 1: Box for Business to OneDrive + Slack to Teams.  Asks A, C, E, J, F
+    -- Docs: Box to OneDrive carries inner file permissions, external shares, shared links and
+    -- in-line comments. Slack to Teams does NOT carry reactions, and DM replies are not migrated.
+    ('A Box to OneDrive copy and a Slack to Teams cutover run the same fortnight. Box is on schedule; the Slack pre-scan has not been signed off. Where would you start?', 1),
+    ('An hour into the Slack cutover a department lead calls to say the emoji responses their team used to sign off on shift changes are gone from every migrated channel. She wants them restored today. What do you say to her on that call?', 1),
+    ('The customer proposes cutting the Box in-line comments out of scope to buy back three days, arguing that comments are not documents. Their legal team uses those comments to record review decisions. Assess that proposal and tell me what you would recommend.', 1),
+    ('Both workstreams are green. Box has copied with permissions intact, Slack channels have moved, and the customer is preparing to tell staff the migration is complete. Reading only what I have told you, name the risk nobody on this project has raised yet, and say why it will surface after go-live rather than before.', 1),
+    ('A finance director who has never run a migration asks you why the Box side could reproduce every permission exactly, right down to who could see one file inside a shared folder, while the Slack side could not bring across something as simple as a thumbs-up on a message. Explain that difference to her in a way she can repeat to her board.', 1),
 
-    -- Set 2: Gmail to Outlook + OneDrive tenant-to-tenant
-    ('A Gmail to Outlook migration is in its second wave, and the parallel OneDrive tenant move keeps re-copying items it has already moved. What would you look at first?', 2),
-    ('Some users say mail filed under several labels now appears in one folder only. At the same time a group of users has no OneDrive content in the destination. Are these one problem or two, and how would you find out?', 2),
-    ('The customer wants the final OneDrive delta pass to run in the same window as the Gmail to Outlook mail cutover, to keep disruption to one evening. Their IT director has approved it. Talk me through the dependencies, and what you would raise before the go-ahead.', 2),
-    ('Two weeks after both cutovers, a shared mailbox the finance team relies on is accessible to nobody, and separately an external auditor can no longer open files that were shared with them. Both worked before the migration. How would you investigate each, and what do they have in common?', 2),
-    ('You are on a go or no-go call. Mail has passed user acceptance testing with two cosmetic defects. The OneDrive tenant move has finished copying but validation has only run against three of twelve departments, and the business owner who signs off is on leave until after the planned cutover. What is your recommendation, and how would you justify it to a customer who wants to proceed?', 2),
+    -- Set 2: ShareFile to SharePoint Online + Teams to Slack.  Asks H, B, D, I, G
+    -- Docs: ShareFile supports NO delta in any destination, no folder display, no shared links.
+    -- Teams to Slack migrates live (no import mode), channel mentions become plain text,
+    -- reactions are not carried, and conflicted messages cannot be retried from the UI.
+    ('A customer has signed for ShareFile to SharePoint and Teams to Slack, and has asked for a weekly incremental copy on the content side. What would you have established before that was quoted?', 2),
+    ('Two weeks after go-live the customer reports that files created in ShareFile since the copy are missing, and separately that timestamps on migrated Slack messages all show the migration date. Is that one problem or two, and how would you tell them apart?', 2),
+    ('You have one weekend and both workstreams to land. One of them can only ever be done once, and the other will post every message live into the destination as it runs. Which would you sequence first, and what does your answer depend on?', 2),
+    ('Your colleague wants to promise the customer a second ShareFile pass close to go-live to pick up late changes, on the grounds that it has worked on other projects. You do not think that promise can be kept. How would you handle that disagreement with him, and what would you propose instead?', 2),
+    ('It is the go or no-go call. The Teams to Slack workstream has passed validation with channel mentions arriving as plain text, which the customer has accepted in writing. The ShareFile side has copied everything, but the business has kept working in ShareFile for the last nine days and nobody has agreed what happens to that work. What is your recommendation, and how would you defend it?', 2),
 
-    -- Set 3: Teams to Google Chat + SharePoint tenant-to-tenant
-    ('A Teams to Chat cutover is three days away, and a site collection used by the same 800 users will not finish copying before it. Can the messaging cutover proceed?', 3),
-    ('Users say conversations that were threaded now read as a flat list, and files shared inside those conversations are unreachable from the message. The SharePoint workstream reports full success. What is happening in each case?', 3),
-    ('During the Chat cutover the migration account loses access mid-wave and the job stops. The same account is used by the SharePoint tenant move, which is mid-delta and also stops. Both resume once it is restored. What would you investigate before the final wave?', 3),
-    ('Two hundred external collaborators work inside Teams channels today and also hold access to documents in the SharePoint tenant being consolidated. The customer wants to migrate messaging now and deal with those collaborators after go-live. Assess that across both workstreams and give your recommendation.', 3),
-    ('A customer moved 800 users from Teams to Chat while consolidating two SharePoint tenants. The Chat workstream took six weeks before a single message moved; the SharePoint one started copying two days after kickoff. At the steering committee, a director with no technical background asks why. How would you explain that difference so they can use it when budgeting the next programme?', 3),
+    -- Set 3: Dropbox to Google Shared Drive + Chat to Slack.  Asks C, J, A, F, E
+    -- Docs: Dropbox to Google carries Dropbox Paper, but Paper tables migrate only to about 62 or
+    -- 63 columns, Paper comments and mentions do not migrate, and in-line comments are No for every
+    -- Dropbox destination. Chat to Slack does not carry reactions and cannot retry conflicts on UI.
+    ('A customer has just been told by their own staff that comments on Dropbox files did not arrive in Google. The Chat to Slack side is mid-migration. What do you say to the customer now?', 3),
+    ('Dropbox Paper documents have migrated, the Chat to Slack workstream reports every channel complete, and the customer is happy enough to be talking about sign-off. Name the risk nobody has raised, and say who will find it first.', 3),
+    ('A planning team says the Dropbox Paper document they run their quarter from is missing most of its columns in Google, and on the same morning a group of Slack users say old reactions are gone. Where would you start with each, and which would you pick up first?', 3),
+    ('The customer operations manager is not technical and is angry that two things she calls basic did not survive: the right-hand columns of a wide Paper document, and the reactions people used to acknowledge messages. Explain to her what happened in each case, and what you can and cannot do about them.', 3),
+    ('The customer wants to keep Dropbox live for another month so staff can go back for anything that did not look right, and to run a Dropbox delta at the end of it, while treating the Chat to Slack side as finished. Assess that proposal on both workstreams, say what it costs them, and give me your recommendation.', 3),
 
-    -- Set 4: Outlook tenant-to-tenant + OneDrive to SharePoint
-    ('A tenant-to-tenant mailbox cutover is booked for Saturday, and the security team has just enabled a policy blocking sign-in from unrecognised locations. What would you do before the weekend?', 4),
-    ('Mailboxes moved on Saturday. On Monday a group of users can send and receive mail but cannot open any document link a colleague sends them. Neither migration log shows an error. How would you investigate?', 4),
-    ('You have six hours for a change window that must hold a tenant-to-tenant mailbox cutover and the final incremental copy of a OneDrive to SharePoint migration. The customer will not extend it. How would you order the activities, and what would you have ready if one overruns?', 4),
-    ('Post-migration validation showed every mailbox present and item counts matching. Two weeks later, meeting invitations from one group show the wrong organiser, and a library migrated from OneDrive has lost a team permission. The customer says both prove the migration was rushed. How would you respond, and what would you actually investigate?', 4),
-    ('An acquisition needs 1,200 mailboxes moved between Microsoft tenants and the same peoples OneDrive content reorganised into SharePoint team libraries. One option is both in a single weekend; the other is mail first and content four weeks later with coexistence in between. Both are technically possible and the customer wants a recommendation today. Which would you recommend, and what would you need answered before committing?', 4),
+    -- Set 4: Egnyte to SharePoint Online + Gmail to Outlook.  Asks D, A, G, B, I
+    -- Docs: Egnyte to SPO has folder display No, selective versions No and in-line comment No;
+    -- names are limited to 200 characters and Egnyte itself forbids leading or trailing spaces.
+    -- Gmail to Outlook drops junk mail and calendar event attachments, carries orphaned labels,
+    -- and supports no second delta.
+    ('You are sequencing Egnyte to SharePoint and Gmail to Outlook for the same 700 people, in two windows a fortnight apart. Which would you put first, and why?', 4),
+    ('Three days before the mail cutover, the Egnyte copy is rejecting several thousand files on their names, and the mail dry run has come back with calendar attachments missing. Where would you start with each?', 4),
+    ('You are asked for a go or no-go on the mail cutover. The mailboxes have passed testing, the Egnyte workstream is four days behind, and the customer has already told staff that both will be done by Monday. What is your recommendation, and what would you ask the customer to communicate?', 4),
+    ('A week after both cutovers the customer raises two things in one email: mail filed under several labels now appears in only one place, and a set of folders they expected in SharePoint is not there at all. Are these related, and how would you establish that before you reply?', 4),
+    ('The customer wants a second mail delta run a fortnight after cutover to sweep up anything left behind, and their IT manager has already put it in his plan. You know why that is a bad idea. How would you raise it with him without undermining him in front of his own team, and what would you offer instead?', 4),
 
-    -- Set 5: Chat to Teams + Shared Drive to OneDrive
-    ('Two days into the Shared Drive to OneDrive pre-stage, throughput is a third of what the pilot achieved. The Chat to Teams workstream is unaffected. What would you check first?', 5),
-    ('An operations team says their daily handover, once posted as replies under one message, is now spread across the channel. Separately, six percent of files did not migrate. The customer has escalated both as one failure. How would you separate them?', 5),
-    ('The customer wants Shared Drive content moved into personal OneDrive areas so each file has one owner, and their Chat to Teams migration is already complete. Discovery shows many of those drives are used daily by whole teams. How would you raise this, and what would you recommend?', 5),
-    ('You are three weeks from go-live on both workstreams for 1,100 users. The customer proposes freezing the source Shared Drives now, a fortnight early, so the content copy has a stable source to work from. Assess that proposal across both workstreams, including what it costs the business, and give your recommendation.', 5),
-    ('Chat to Teams is complete for 1,100 users and the Shared Drive to OneDrive workstream is a week from cutover, where files move in full but a number of sharing arrangements must be reissued. The business owner is not technical and cannot see why one migration is complete and the other is not. How would you explain the difference, and what would you give her to repeat?', 5),
+    -- Set 5: Amazon WorkDocs to SharePoint Online + Slack to Slack.  Asks B, F, H, E, C
+    -- Docs: WorkDocs to SPO carries versions, external shares and timestamps, but NOT inner file
+    -- permissions, and email notifications cannot be suppressed. Slack to Slack is the only
+    -- combination that carries pinned messages; archived channels still cannot be created by API.
+    ('Users report a flood of sharing notifications from SharePoint the morning after the WorkDocs copy, and separately that some Slack channels are missing. One problem or two?', 5),
+    ('An operations director asks why a whole archive of old Slack channels, which her team deliberately closed but kept for reference, is not in the new workspace as she left it. Explain what happened and what her options are.', 5),
+    ('A customer wants WorkDocs moved into SharePoint with permissions exactly as they are today, including who can reach individual files inside a shared folder, and has said so in the requirements. What would you have established before agreeing to that?', 5),
+    ('To keep the notification noise down, the customer proposes running the WorkDocs copy overnight on a Saturday and telling nobody until Monday, while the Slack to Slack move runs in the same window. Assess that, including what it does to the helpdesk, and give me your recommendation.', 5),
+    ('It is Monday morning. Staff have arrived to a mailbox full of SharePoint notifications they do not understand, their Slack pins are intact but a set of closed channels has come back as ordinary open ones, and the customer sponsor is on the phone asking whether the weekend went wrong. What do you say to him, in what order, and what do you commit to before the call ends?', 5),
 
-    -- Set 6: Slack to Chat + SPO to Shared Drive
-    ('The Slack to Chat pilot has finished and the engineering team is unhappy: their runbooks arrived as plain text. The content pilot has not started. What would you do about each?', 6),
-    ('The customer legal team runs a date-range search across migrated messages and migrated content for a regulatory request, and says the results no longer match what they got before. Both migrations reported success. How would you approach this?', 6),
-    ('Documents converting to Google format on arrival have lost comments and tracked changes, and the Slack to Chat workstream is holding at 95 percent with private channels not yet moved. The customer asks which should worry them more. How would you answer, and what would you do about each?', 6),
-    ('The customer wants both source platforms decommissioned two weeks after go-live to stop licence spend. Your own data from previous projects shows genuine recovery requests continuing past that point, though most could have been served from the destination. Make the case to the customer and say what you would recommend.', 6),
-    ('You are giving a go or no-go recommendation for one weekend that contains both a Slack to Chat messaging cutover and a SharePoint to Shared Drive content cutover. Messaging has passed validation. Content has 4,000 files failing on their names, unremediated, which the customer says belong to an archive nobody uses. What is your recommendation, and how would you defend it if the customer disagrees?', 6)
+    -- Set 6: Google Shared Drive to SharePoint Online + Slack to Google Chat.  Asks J, I, C, D, G
+    -- Docs: Google file versions cannot carry their original timestamps into SPO -- the system
+    -- stamps upload time and there is no API to override it. Slack to Chat carries reactions and
+    -- code blocks, but Chat cannot fully migrate mentions, has no pinned concept, and the
+    -- out-of-scope list covers self-DMs, workflows, custom emoji and multi-file messages.
+    ('A Shared Drive to SharePoint copy and a Slack to Chat cutover are both reporting complete, and the customer is preparing sign-off. What is the risk nobody has raised?', 6),
+    ('Your colleague has told the customer that version history came across intact from Google. It did come across, but not in the way the customer will understand by that sentence. How would you handle that?', 6),
+    ('The customer compliance officer calls: an auditor has asked her to show when each version of a policy document was created, and the dates in SharePoint are all the migration date. She wants to know what you did wrong. What do you say?', 6),
+    ('You have both workstreams and one change window that will not hold both. One of them ends with people talking to each other somewhere new; the other ends with documents in a place nobody has to visit until Monday. Which do you cut over first, and what would make you change your mind?', 6),
+    ('Go or no-go. The Slack to Chat side has passed testing, with mentions arriving in a reduced form the customer has accepted. The Shared Drive side has copied every file, but version dates are all showing as the migration date and the customer regulator requires the original dates on one library of about nine hundred documents. What is your recommendation, and what would you put in front of the customer to support it?', 6)
     ) AS v(text, set_number)
-WHERE NOT EXISTS (SELECT 1 FROM seed_state WHERE seed_key = 'l3-speaking-questions-v2');
+WHERE NOT EXISTS (SELECT 1 FROM seed_state WHERE seed_key = 'l3-speaking-questions-v3');
 
 -- ---------- Sets 7 to 12 ----------
 INSERT INTO speaking_sentence (created_at, updated_at, text, set_number, level, difficulty)
 SELECT now(), now(), v.text, v.set_number, 3, 'HARD'
 FROM (VALUES
-    -- Set 7: Teams tenant-to-tenant + Shared Drive tenant-to-tenant
-    ('Two merged companies are moving Teams between Microsoft tenants and Shared Drives between Google tenants. The sponsor calls both simple because nothing changes platform. Where do you expect the difficulty?', 7),
-    ('After the Teams tenant move, some users find their channels owned by somebody else and a few find channels missing. Fourteen shared drives ended up owned by a service account. What would you investigate first?', 7),
-    ('The customer wants the Shared Drive copy and the Teams cutover in one weekend to reduce production changes. Both depend on the same destination accounts existing beforehand, and their own IT team is creating them. What would you clarify, and how does that change the plan?', 7),
-    ('Halfway through the programme, the customer HR team supplies an updated list showing 90 people who have left since discovery. Both workstreams have already had their mapping files signed off. Talk me through the impact on each, and what you would ask the customer to decide.', 7),
-    ('A customer is unhappy that this same-platform tenant-to-tenant programme has taken nine days longer than a cross-platform project they ran last year, and says the estimate must have been wrong. Both the Teams and the Shared Drive workstreams are affected, and the complaint has gone to your director. How would you handle that conversation, and what would you examine before responding to the claim?', 7),
+    -- Set 7: Dropbox to Azure Blob + Teams to Teams.  Asks H, C, B, F, E
+    -- Docs: Dropbox to Azure Blob is copy-only -- one time, delta, long path, special characters
+    -- and Dropbox Paper, and nothing else: no permissions, no versions, no timestamps, no shares.
+    -- Teams to Teams does not carry reactions, forwarded messages, the Edited label, bot or Polly
+    -- messages, meeting chats or recordings, self DMs, or DMs involving external users.
+    ('A customer wants Dropbox archived into Azure Blob while their Teams tenants are consolidated. They have asked for permissions to be preserved on the archive. What would you establish first?', 7),
+    ('The customer has opened the Azure archive and found no version history and no sharing, and in the same call says forwarded messages are missing from the migrated Teams channels. What do you tell them?', 7),
+    ('A department says two things went wrong: nobody can tell which of their migrated Teams messages were edited, and files pulled out of the Azure archive have lost the dates they were created. Are these the same kind of problem or two different ones?', 7),
+    ('The customer programme manager is not technical. He wants to know why you were able to move nine years of Dropbox content into Azure without much difficulty, but could not bring across a poll their team ran every week in Teams. Explain both in terms he can use.', 7),
+    ('The customer proposes treating the Azure Blob archive as their compliance record of record, and decommissioning Dropbox at the end of the month to stop the licence spend, while the Teams consolidation carries on into next quarter. Assess that proposal against what the archive actually contains rather than what they believe it contains, say what would have to change before it could hold, and give me your recommendation.', 7),
 
-    -- Set 8: Gmail tenant-to-tenant + SPO to OneDrive
-    ('The Gmail tenant consolidation cannot start until account mapping is signed off, and the SPO to OneDrive workstream has already begun. Quarter end is five weeks away. Is that achievable?', 8),
-    ('Delegated access to colleagues mailboxes has stopped working, and files shared from SharePoint before the OneDrive move can no longer be opened by the people they were shared with. What is the likely common factor?', 8),
-    ('The content workstream needs the source read-only for six hours, and the mail cutover needs a different six hours the same night. The customer wants files in place before mail moves. How would you coordinate the two, and what would you tell them about the risk?', 8),
-    ('Two weeks after go-live, some documents show a migration service account as the last editor and some migrated messages show a sender name that is not the original author. The compliance officer has asked in writing whether the audit trail has been compromised. How would you respond to her, and what would you verify before saying anything definite?', 8),
-    ('You have to recommend whether a Gmail tenant-to-tenant consolidation runs as one cutover for 900 users or three waves of 300, with the SPO to OneDrive workstream running in parallel either way and finishing in week three. The customer helpdesk has four people and no weekend cover. Give your recommendation, your reasoning, and what would make you change your mind.', 8),
+    -- Set 8: Box to Google (My Drive and Shared Drive) + Mural and Lucid to Miro.  Asks A, J, I, G, F
+    -- Docs: Box to Google is a rich combination, but Box Notes degrade -- tables break, checklists
+    -- and numbered lists lose their format, mentions are not migrated at all, tags do not migrate
+    -- and shared links created for Notes do not migrate. Whiteboard never carries comments, hand
+    -- drawing, tables or voting; Lucid to Miro additionally loses icons, frames, GIFs and files.
+    ('Box to Google is running for 600 users, and a Mural and Lucid estate is moving to Miro alongside it. The design team has raised a defect on both. Where would you start?', 8),
+    ('Both workstreams report complete. Files are in Google, boards are in Miro, and the customer design lead has signed off on a sample of five boards she chose herself. Name the risk nobody has raised.', 8),
+    ('A colleague has written to the customer that Box Notes migrate to Google Docs and that whiteboards migrate to Miro, both of which are true and both of which will be read as more than they mean. How would you handle that before the customer reads it?', 8),
+    ('Go or no-go on decommissioning Box and the whiteboard tools at the end of the month. Content has migrated. Box Notes have arrived with their tables broken and their mentions gone, and the Lucid boards have lost the frames the teams used to structure them. The customer says both are cosmetic. What is your recommendation?', 8),
+    ('A workshop facilitator who is not technical wants to know why the sticky notes and connectors on her Mural boards came across perfectly, but the comments her team left on them and the votes they cast to pick a direction did not. Explain it to her, and tell her what you would do about the record of those decisions.', 8),
 
-    -- Set 9: Outlook to Gmail + OneDrive to Shared Drive
-    ('Two weeks after the Outlook to Gmail cutover, the helpdesk has a steady stream of calls describing mail as missing. The migration reported no failures and counts reconcile. What would you investigate?', 9),
-    ('The customer wants OneDrive content moved into Shared Drives before the mail cutover so staff face one change rather than two. Your colleague recommends the opposite order. Which would you choose, and what would make the other order right?', 9),
-    ('A business team reports recurring meetings appearing twice in their new calendars, and in the same week a migrated folder structure arrived intact but reachable by fewer people than before. The customer wants one root cause analysis covering both. How would you respond to that request?', 9),
-    ('The communication for the mail workstream tells every member of staff they must rebuild their own mail rules, while the content note asks them to do nothing at all. An executive has seen both and wants to know whether his team is absorbing an avoidable cost. Explain the difference and what you would offer.', 9),
-    ('You are running a go or no-go call for the Outlook to Gmail cutover. Content migration to Shared Drives is complete and validated, and mail testing is complete except that the pilot group never exercised delegate access. Three of the customer executives rely on assistants who manage their calendars, and the customer wants to proceed tonight. What is your recommendation, and what would you require before agreeing to go?', 9),
+    -- Set 9: NFS and SMB file server to SharePoint Online + Outlook to Gmail.  Asks D, B, E, C, H
+    -- Docs: NFS to SPO has no versions, no external shares, no shared links and no root file
+    -- permissions. Outlook to Gmail cannot carry rules and forwarding settings, categories,
+    -- Outlook Notes, To-Do, or contact groups, does not keep pinned mail pinned, and past calendar
+    -- events are migrated only for the organiser, so attendees never receive them.
+    ('An NFS file server is moving to SharePoint Online while mail moves from Outlook to Gmail, for the same 450 staff. Which would you cut over first, and why?', 9),
+    ('A team says their old file versions are not in SharePoint, and on the same day the finance group says the rules that sorted their mail have stopped working. Are these one problem or two, and how would you establish that?', 9),
+    ('The customer wants the file server left online, read-only, for six months after cutover, and asks you to migrate their Outlook rules as part of the same change so nobody has to rebuild them. Assess both requests, and give me a recommendation on each.', 9),
+    ('The customer executive assistant calls in some distress. The meetings she manages for four directors are in Gmail, but none of the attendees can see the ones already in the past, and she thinks she has lost a years worth of scheduling. What do you say to her?', 9),
+    ('You are reviewing a statement of work another consultant drafted for this customer. It promises version history on the file server content and a like-for-like move of mail rules and categories, and the customer has not signed yet. What would you have established before any of that was written, and how do you put it right now without losing the deal?', 9),
 
-    -- Set 10: Slack consolidation + OneDrive tenant-to-tenant
-    ('Three Slack workspaces are being consolidated into one, and all three contain channels with identical names. The OneDrive tenant move is ready and waiting on a date. What has to be resolved first?', 10),
-    ('Two days after the Slack consolidation, some conversations users expected are missing, and a group of users OneDrive content arrived but cannot be opened. The customer suspects one migration damaged the other. How would you establish whether they are related?', 10),
-    ('Two workspaces have moved and the third goes next week. The customer asks whether the OneDrive tenant migration can start now rather than wait, arguing the two touch different systems. Do you agree, and what would you want in place before running them concurrently?', 10),
-    ('External partners can no longer post in the consolidated workspace and cannot open the files they were sent. The customer regards this as a single failure by your team. How would you explain what has happened across the two workstreams, and what would you need from them to fix it?', 10),
-    ('You have to recommend how long the three source Slack workspaces and the source OneDrive tenant stay alive after go-live. Licences for both cost real money, the finance director is pressing to switch everything off at day seven, and your own evidence on recovery requests is mixed. Make your recommendation, say what evidence you would bring, and explain how you would handle it if the customer overrules you.', 10),
+    -- Set 10: SharePoint Online to SharePoint Online + Outlook to Outlook.  Asks C, F, A, J, I
+    -- Docs: Outlook to Outlook keeps flagged mail and high and low importance, but drops junk
+    -- mail, calendar event attachments, categories and contact labels, and supports no second
+    -- delta. SharePoint to SharePoint has the standard content checklist behind it.
+    ('Two Microsoft tenants are being consolidated after an acquisition: SharePoint to SharePoint and Outlook to Outlook. The customer has found something missing in each. What do you tell them first?', 10),
+    ('The acquired company office manager wants to know why the colour categories she used to run her filing for eleven years did not survive a move between two systems that are, as she puts it, both Outlook. Explain it to her.', 10),
+    ('Mailboxes moved on Saturday and every item count reconciles against the source. On Monday a group of users say meeting invitations they had already accepted have lost their attachments, and separately a SharePoint library that worked on Friday is missing a permission the finance team relies on. Where would you start with each?', 10),
+    ('Both migrations have completed, every count reconciles, the punch list is down to three cosmetic items and the customer is ready to sign off and release both source tenants at the end of the month to stop the licence spend. Name the risk nobody on this project has raised, and say what you would want done about it before that release date arrives.', 10),
+    ('The customer IT lead has told his own leadership that a second delta will run in four weeks to catch anything the business missed, and that commitment is now in a board pack. You know it cannot be done on the mail side. How would you handle that, given he made the promise in good faith and will lose face?', 10),
 
-    -- Set 11: Chat tenant-to-tenant + Shared Drive to SharePoint
-    ('Four legal holds cover conversations in the source Chat tenant, and retention labels must survive on the content side. How does each requirement affect its workstream?', 11),
-    ('A business unit reports that documents they expect to be restricted are visible to more people than before. The Chat workstream alongside reports no issues, and the customer wants both migrations stopped immediately. How would you respond in that moment?', 11),
-    ('Two workstreams share a change window: a Chat tenant cutover and the final delta pass of a Shared Drive to SharePoint migration. On the night, the content delta is four hours behind and will overlap the cutover. How would you handle that, and who would you involve?', 11),
-    ('The records manager has to defend two outcomes to an auditor: a block of conversations staying in the source tenant rather than moving, and documents arriving unchanged while the way they are shared does not. How would you explain each, and what would you put in writing for her?', 11),
-    ('The programme is eight days from go-live for 700 users and 18 terabytes. The punch list has four open items: retention rules not yet rebuilt at the destination, 30 external collaborators not re-invited, 2,000 files failing on their names, and the migration account access expiring in ten days. The customer wants to hold the date. Which are blockers and which can run into hypercare, and why?', 11),
+    -- Set 11: Google My Drive to OneDrive with LinkEX + Workplace from Meta to Google Chat.
+    -- Asks B, H, E, F, G
+    -- Docs: LinkEX identifies link files, linked files and paths, produces pre-scan and fix-scan
+    -- reports and repairs broken links for My Drive and Shared Drive into OneDrive and SharePoint.
+    -- Workplace to Chat does not carry custom emoji, channel or DM threads, DM reactions,
+    -- external-user messages, self messaging, bot integrations or pre-scan; pinned posts arrive as
+    -- normal text and mentions arrive as plain text.
+    ('Staff report that links inside migrated Google documents still point back at the old drive, and separately that Workplace threads are not in Chat. One problem or two?', 11),
+    ('A customer is moving My Drive to OneDrive and Workplace to Google Chat, and has asked for a pre-scan on both so they can size the work before committing. What would you have established before promising that?', 11),
+    ('The customer wants to run the link remediation once, at the very end, after every workstream is finished, on the grounds that fixing links twice is waste. Assess that, say what it depends on, and give me your recommendation.', 11),
+    ('The head of communications wants to know why the posts and reactions from Workplace came across to Chat, but the discussion threads underneath those posts, which she says are where the actual decisions were made, did not. Explain what happened and what she can do to preserve that record.', 11),
+    ('Go or no-go on closing Workplace at the end of next week. Posts, chats and attachments have migrated. Threads on channels are not there, external partners who posted in two groups have not come across, and the customer has an open regulatory request that may need those conversations. What is your recommendation, and what would you need from the customer before you would change it?', 11),
 
-    -- Set 12: Teams to Chat + Gmail to Outlook
-    ('Messaging is moving from Teams to Chat while mail moves from Gmail to Outlook, because two parts of the business decided separately. Can those two decisions coexist?', 12),
-    ('Meeting invitations sent from the new mail platform are not appearing in the calendars of colleagues who have already moved messaging. Both migrations report normal operation. How would you investigate, and what would you check about migration order?', 12),
-    ('Staff are receiving mail correctly in Outlook but continue posting in Teams, which is no longer the supported platform, and files shared there are not reaching the people who need them. Both migrations are complete and validated. How would you approach this, and is it a migration problem?', 12),
-    ('A customer of 1,000 staff wants messaging and mail cut over in the same week to get the disruption over with. Their helpdesk has six people, no weekend cover, and took 90 calls after a much smaller migration last year. Assess that plan, say when you would expect the load to arrive from each workstream, and give your recommendation.', 12),
-    ('You have to recommend a sequence for a customer moving messaging from Teams to Chat and mail from Gmail to Outlook. Mail first leaves staff with new mail and old messaging for a period; messaging first inverts that, and neither is free. Which would you recommend, what does your choice depend on, and what would you need to know about this customer first?', 12)
+    -- Set 12: Egnyte to Google Shared Drive + Slack into an EXISTING Teams tenant.  Asks A, C, D, J, E
+    -- Docs: Egnyte carries in-line comments to its two Google destinations only; the same row is No
+    -- for Egnyte to SharePoint and Egnyte to OneDrive. Slack into an existing Teams tenant does NOT carry channel members, direct
+    -- messages, DM threads, channel renaming or time-period filtering, and archived channels are
+    -- not supported.
+    ('An Egnyte to Google Shared Drive copy is running while Slack is merged into a Teams tenant the customer already uses. Members are missing from the migrated channels. Where would you start?', 12),
+    ('The customer has realised their direct messages are not in Teams and says nobody told them. It is in the scope document, on a page they signed. What do you say on the call?', 12),
+    ('You have two workstreams and a customer who wants both finished before their quarter closes in three weeks. One of them will land in a tenant that is already in daily use by five hundred people. Which do you do first, and what makes that the right order?', 12),
+    ('Content has copied with its in-line comments intact, the Slack channels are sitting in the existing Teams tenant, the customer is pleased with both, and their project manager is already drafting the completion notice for the steering committee. Name the risk nobody on this project has raised, and say which group of people will run into it first.', 12),
+    ('The customer proposes keeping Slack open for direct messages only, indefinitely, so that nothing anybody has ever said is lost, while every channel and all of the content moves into the Teams tenant they already run. They present this to you as the safe compromise. Assess it on cost, on how people will actually end up working, and on what it does to any future request for records, then tell me what you would recommend instead.', 12)
     ) AS v(text, set_number)
-WHERE NOT EXISTS (SELECT 1 FROM seed_state WHERE seed_key = 'l3-speaking-questions-v2');
+WHERE NOT EXISTS (SELECT 1 FROM seed_state WHERE seed_key = 'l3-speaking-questions-v3');
 
-INSERT INTO seed_state (seed_key) VALUES ('l3-speaking-questions-v2') ON CONFLICT DO NOTHING;
+INSERT INTO seed_state (seed_key) VALUES ('l3-speaking-questions-v3') ON CONFLICT DO NOTHING;
