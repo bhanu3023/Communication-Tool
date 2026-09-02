@@ -89,8 +89,11 @@ public class ManagerController {
     @Operation(summary = "Get the full detail for one team member")
     @GetMapping("/employee/{id}")
     public ManagerDtos.EmployeeDetail employee(@PathVariable Long id,
-                                               @RequestParam(defaultValue = "1") int level) {
-        return managerService.employeeDetail(currentUser.user(), id, level);
+                                               @RequestParam(defaultValue = "1") int level,
+                                               @RequestParam(defaultValue = "true") boolean ai) {
+        // ai defaults to TRUE so every existing caller is unaffected; the manager page passes
+        // ai=false for its first load and fetches the coaching separately. See ManagerService.
+        return managerService.employeeDetail(currentUser.user(), id, level, ai);
     }
 
     @Operation(summary = "Alias of employee detail used by the report view")

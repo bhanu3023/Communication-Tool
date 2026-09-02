@@ -55,8 +55,13 @@ export const recordViolation = (sessionId, reason) =>
 // --- Manager ---
 export const getTeam = (params) => api.get('/manager/team', { params }).then((r) => r.data);
 export const getTeams = () => api.get('/manager/teams').then((r) => r.data);
-export const getEmployeeDetail = (id, level = 1) =>
-  api.get(`/manager/employee/${id}`, { params: { level } }).then((r) => r.data);
+/**
+ * `ai` defaults to true, which is what the endpoint does, so nothing that omits it changes.
+ * The manager detail page passes false to render immediately, then calls again with true for
+ * the coaching panel: that call is a live OpenAI round trip and used to block the whole page.
+ */
+export const getEmployeeDetail = (id, level = 1, { ai = true } = {}) =>
+  api.get(`/manager/employee/${id}`, { params: { level, ai } }).then((r) => r.data);
 export const getEmployeeAttempts = (id, level) =>
   api.get(`/manager/employee/${id}/attempts`, { params: level ? { level } : {} }).then((r) => r.data);
 export const downloadPdf = (id, level = 1) =>

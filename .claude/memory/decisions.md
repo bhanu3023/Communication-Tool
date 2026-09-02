@@ -516,3 +516,32 @@ dependency, schema change, boundary exception, or naming/collision resolution.
   for revising any seeded bank.
 - Answer keys rebalanced again after the rewrites: even across the bank, never more than three of
   one letter in any set of ten.
+
+
+### Performance pass: the SPA was served uncompressed, and the manager page waited on OpenAI (2026-09-02)
+- **Reported:** lag signing in and lag in the manager portal. Measured both rather than guessed,
+  and they turned out to be two unrelated causes, neither of them query time.
+- **The app felt slow after login because nginx served everything uncompressed.** 1,040 KB of raw
+  JavaScript on a cold load, with the browser advertising gzip and getting no `Content-Encoding`
+  back. Asset names carry a content hash, so every deploy invalidates every cached chunk and each
+  user pays the full download again -- which is exactly when somebody notices. `gzip on` with a
+  sensible type list takes it to **325 KB over the wire, a 69% cut**. Configuration only: the
+  bytes the browser ends up with are byte-identical.
+- **The manager portal was waiting on a live OpenAI call before rendering anything.**
+  `ManagerService.employeeDetail` called `AiService.buildOverall` unconditionally, and opening a
+  team member with scores measured **4,995 ms cold** (8,038 ms on a second run -- OpenAI latency
+  varies) against **77 ms warm**. Every other part of that page is a database read under 100 ms.
+  The employee dashboard had the same fault and was fixed in the 2026-08-04 pass by making the AI
+  call opt-in; the manager path was left behind.
+- **Shaped so nothing existing could change.** The endpoint keeps `ai=true` as its default, so the
+  report view and the PDF path -- both of which call the three-argument overload -- behave exactly
+  as before; verified, both still 200 with the coaching present. Only the manager detail page opts
+  out, renders in 77 ms, then fetches the coaching and merges it into the same panel. A
+  stale-response guard covers a manager switching level while the slow call is in flight.
+- **Checked and deliberately left alone:** the indexes are already right (someone added
+  `idx_assessment_session_user_section_level_status` and the session-id indexes); the team filter
+  already debounces at 300 ms and filters status client-side; the JWT filter does no database work
+  per request; the post-login employee calls are all under 90 ms. Login itself is three queries.
+  What remains in the sign-in path is MSAL round-tripping to Microsoft, which is not ours.
+- **Local data is 16 MB against 215 MB in production**, so none of this was found by timing
+  queries -- it was found by looking for fixed costs that small data cannot hide.

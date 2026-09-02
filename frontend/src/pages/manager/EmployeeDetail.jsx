@@ -188,13 +188,39 @@ export default function EmployeeDetail() {
   }, [location.state, level]);
 
   // Sections, warnings and feedback are all per level, so a level change refetches.
+  //
+  // Two phases on purpose. The first call skips the AI coaching, which is a live OpenAI round
+  // trip measured at about five seconds on a cold cache while every other part of this page is a
+  // database read of well under a hundred milliseconds. The page renders from that, then the
+  // coaching is fetched and dropped into the same panel.
   useEffect(() => {
+    let current = true; // a level switch mid-flight must not paste old coaching onto the new page
     setLoading(true);
-    getEmployeeDetail(id, level)
-      .then(setDetail)
-      .catch((e) => showToast(e?.response?.data?.message || 'Failed to load employee', 'error'))
-      .finally(() => setLoading(false));
+    getEmployeeDetail(id, level, { ai: false })
+      .then((d) => {
+        if (!current) return;
+        setDetail(d);
+        setLoading(false);
+        return getEmployeeDetail(id, level, { ai: true })
+          .then((withAi) => {
+            if (!current) return;
+            // Merge rather than replace: the fast response is already on screen and the second
+            // one differs only in these two fields.
+            setDetail((prev) =>
+              prev ? { ...prev, aiFeedback: withAi.aiFeedback, recommendations: withAi.recommendations } : withAi,
+            );
+          })
+          .catch(() => {}); // coaching is an extra; its failure must not blank a working page
+      })
+      .catch((e) => {
+        if (!current) return;
+        showToast(e?.response?.data?.message || 'Failed to load employee', 'error');
+        setLoading(false);
+      });
     getEmployeeAttempts(id, level).then(setAttempts).catch(() => setAttempts([]));
+    return () => {
+      current = false;
+    };
   }, [id, level, showToast]);
 
   const handleGrant = async (section) => {

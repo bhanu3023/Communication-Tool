@@ -389,6 +389,19 @@ public class ManagerService {
 
     /** Employee detail for one level, so a manager can review Level 2 as well as Level 1. */
     public ManagerDtos.EmployeeDetail employeeDetail(User manager, Long employeeId, int level) {
+        return employeeDetail(manager, employeeId, level, true);
+    }
+
+    /**
+     * @param includeAi false to skip the coaching summary. That summary is a live OpenAI call --
+     *                  measured at about five seconds on a cold cache -- and every other part of
+     *                  this page is a database read of well under a hundred milliseconds. The
+     *                  manager view asks for the page without it, renders, and then requests it,
+     *                  so nothing on screen waits for the network. Callers that omit the flag
+     *                  keep the old behaviour, which is what the PDF report path relies on.
+     */
+    public ManagerDtos.EmployeeDetail employeeDetail(User manager, Long employeeId, int level,
+                                                     boolean includeAi) {
         User employee = userRepository.findById(employeeId)
                 .orElseThrow(() -> new ResourceNotFoundException("Employee not found: " + employeeId));
 
@@ -407,7 +420,9 @@ public class ManagerService {
         Double latestL = sections.stream().filter(c -> c.section().equals("LISTENING")).findFirst().map(DashboardDtos.SectionCard::latestScore).orElse(null);
         Double latestS = sections.stream().filter(c -> c.section().equals("SPEAKING")).findFirst().map(DashboardDtos.SectionCard::latestScore).orElse(null);
         Double latestW = sections.stream().filter(c -> c.section().equals("WRITING")).findFirst().map(DashboardDtos.SectionCard::latestScore).orElse(null);
-        OverallFeedback fb = aiService.buildOverall(latestL, latestS, latestW);
+        OverallFeedback fb = includeAi
+                ? aiService.buildOverall(latestL, latestS, latestW)
+                : new OverallFeedback(List.of(), List.of(), List.of());
 
         return new ManagerDtos.EmployeeDetail(
                 employee.getId(), employee.getName(), employee.getEmail(), employee.getEmployeeId(),
